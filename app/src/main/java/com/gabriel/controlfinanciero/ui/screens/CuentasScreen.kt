@@ -1,9 +1,9 @@
 package com.gabriel.controlfinanciero.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -13,15 +13,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,6 +23,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
 
 // Colores coherentes
 private val AccountsBackground = Color(0xFF021712)
@@ -43,13 +38,27 @@ private val TextMuted = Color(0xFF9CA3AF)
 //                      PANTALLA CUENTAS
 // =============================================================
 @Composable
-fun CuentasScreen(isDarkMode: Boolean) {
+fun CuentasScreen(
+    isDarkMode: Boolean,
+    viewModel: FinanceViewModel = viewModel()
+) {
+    val cuentas by viewModel.cuentas.collectAsState()
+
+    // Totales calculados a partir de las cuentas
+    val totalActivos = cuentas.sumOf { it.saldoInicial }
+    val totalPasivos = 8300.0 // de momento fijo
 
     val bgColor = if (isDarkMode) AccountsBackground else Color(0xFFF3F6FF)
     val cardColor = if (isDarkMode) CardDark else Color.White
     val softCardColor = if (isDarkMode) CardDarkSoft else Color(0xFFE5E7EB)
     val textPrimary = if (isDarkMode) Color.White else Color.Black
     val textMutedColor = if (isDarkMode) TextMuted else Color.Gray
+
+    // Estado para el diálogo de nueva cuenta
+    var showNuevaCuentaDialog by remember { mutableStateOf(false) }
+    var nuevaCuentaNombre by remember { mutableStateOf("") }
+    var nuevaCuentaSaldoText by remember { mutableStateOf("") }
+    var nuevaCuentaTipo by remember { mutableStateOf("EFECTIVO") }
 
     Box(
         modifier = Modifier
@@ -106,7 +115,7 @@ fun CuentasScreen(isDarkMode: Boolean) {
             ) {
                 PatrimonioCard(
                     titulo = "Total Activos",
-                    monto = 15750.0,
+                    monto = totalActivos,
                     colorMonto = AccentGreen,
                     modifier = Modifier.weight(1f),
                     cardColor = cardColor,
@@ -114,7 +123,7 @@ fun CuentasScreen(isDarkMode: Boolean) {
                 )
                 PatrimonioCard(
                     titulo = "Total Pasivos",
-                    monto = 8300.0,
+                    monto = totalPasivos,
                     colorMonto = AccentRed,
                     modifier = Modifier.weight(1f),
                     cardColor = cardColor,
@@ -134,38 +143,27 @@ fun CuentasScreen(isDarkMode: Boolean) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            AccountItemCard(
-                icon = Icons.Default.AccountBalanceWallet,
-                iconBgColor = Color(0xFF16A34A),
-                titulo = "Efectivo",
-                subtitulo = "Dinero en mano",
-                monto = 500.0,
-                cardColor = cardColor,
-                textPrimary = textPrimary,
-                textMutedColor = textMutedColor
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            AccountItemCard(
-                icon = Icons.Default.AccountBalance,
-                iconBgColor = Color(0xFF2563EB),
-                titulo = "Banco Principal",
-                subtitulo = "Cuenta de nómina",
-                monto = 12250.0,
-                cardColor = cardColor,
-                textPrimary = textPrimary,
-                textMutedColor = textMutedColor
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            AccountItemCard(
-                icon = Icons.Default.Savings,
-                iconBgColor = Color(0xFFEAB308),
-                titulo = "Ahorros Viaje",
-                subtitulo = "Fondo para vacaciones",
-                monto = 3000.0,
-                cardColor = cardColor,
-                textPrimary = textPrimary,
-                textMutedColor = textMutedColor
-            )
+            if (cuentas.isEmpty()) {
+                Text(
+                    text = "Aún no tienes cuentas registradas.\nToca el botón + para crear una.",
+                    color = textMutedColor,
+                    fontSize = 14.sp
+                )
+            } else {
+                cuentas.forEach { cuenta ->
+                    AccountItemCard(
+                        icon = Icons.Default.AccountBalanceWallet,
+                        iconBgColor = Color(0xFF16A34A),
+                        titulo = cuenta.nombre,
+                        subtitulo = cuenta.tipo,
+                        monto = cuenta.saldoInicial,
+                        cardColor = cardColor,
+                        textPrimary = textPrimary,
+                        textMutedColor = textMutedColor
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -200,7 +198,11 @@ fun CuentasScreen(isDarkMode: Boolean) {
                 modifier = Modifier
                     .size(64.dp)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(AccentGreen),
+                    .background(AccentGreen)
+                    .clickable {
+                        // Abrimos diálogo para crear cuenta con datos reales
+                        showNuevaCuentaDialog = true
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -210,6 +212,115 @@ fun CuentasScreen(isDarkMode: Boolean) {
                 )
             }
         }
+    }
+
+    // ================= DIÁLOGO NUEVA CUENTA =================
+    if (showNuevaCuentaDialog) {
+        AlertDialog(
+            onDismissRequest = { showNuevaCuentaDialog = false },
+            title = { Text("Nueva cuenta") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = nuevaCuentaNombre,
+                        onValueChange = { nuevaCuentaNombre = it },
+                        label = { Text("Nombre de la cuenta") },
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = nuevaCuentaSaldoText,
+                        onValueChange = { nuevaCuentaSaldoText = it },
+                        label = { Text("Saldo inicial (S/)") },
+                        singleLine = true
+                    )
+
+                    Text(
+                        text = "Tipo de cuenta",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TipoChip(
+                            label = "EFECTIVO",
+                            selected = nuevaCuentaTipo == "EFECTIVO"
+                        ) { nuevaCuentaTipo = "EFECTIVO" }
+
+                        TipoChip(
+                            label = "BANCO",
+                            selected = nuevaCuentaTipo == "BANCO"
+                        ) { nuevaCuentaTipo = "BANCO" }
+
+                        TipoChip(
+                            label = "BILLETERA",
+                            selected = nuevaCuentaTipo == "BILLETERA"
+                        ) { nuevaCuentaTipo = "BILLETERA" }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val saldo = nuevaCuentaSaldoText.replace(",", ".")
+                            .toDoubleOrNull() ?: 0.0
+                        val nombreFinal =
+                            if (nuevaCuentaNombre.isBlank())
+                                "Cuenta ${cuentas.size + 1}"
+                            else
+                                nuevaCuentaNombre.trim()
+
+                        viewModel.crearCuenta(
+                            nombre = nombreFinal,
+                            tipo = nuevaCuentaTipo,
+                            saldoInicial = saldo
+                        )
+
+                        // Limpiamos estado
+                        nuevaCuentaNombre = ""
+                        nuevaCuentaSaldoText = ""
+                        nuevaCuentaTipo = "EFECTIVO"
+                        showNuevaCuentaDialog = false
+                    }
+                ) {
+                    Text("Guardar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNuevaCuentaDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+}
+
+// =============================================================
+//  CHIP SIMPLE PARA ELEGIR TIPO DE CUENTA
+// =============================================================
+@Composable
+private fun TipoChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(999.dp),
+        color = if (selected) AccentGreen.copy(alpha = 0.2f) else Color.Transparent,
+        border = if (selected)
+            ButtonDefaults.outlinedButtonBorder
+        else
+            null
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) Color.Black else TextMuted
+        )
     }
 }
 

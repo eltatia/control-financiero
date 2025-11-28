@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,6 +28,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
 
 // Colores modo oscuro para Home (parecidos a Reportes/Calendario)
 private val HomeDarkBackground = Color(0xFF021712)
@@ -287,8 +291,19 @@ private fun LegendRow(label: String, amount: String, color: Color, darkMode: Boo
 @Composable
 fun HomeScreen(
     isDarkMode: Boolean,
-    onToggleDarkMode: () -> Unit
+    onToggleDarkMode: () -> Unit,
+    viewModel: FinanceViewModel = viewModel()
 ) {
+    // ▶️ Datos reales desde el ViewModel / Room
+    val totalIngresos by viewModel.totalIngresosMes.collectAsState()
+    val totalEgresos by viewModel.totalEgresosMes.collectAsState()
+    val balance by viewModel.balanceMes.collectAsState()
+
+    // Cargar datos del mes actual al entrar a Home
+    LaunchedEffect(Unit) {
+        viewModel.cargarDatosMes()
+    }
+
     val bgColor = if (isDarkMode) HomeDarkBackground else Color(0xFFF3F6FF)
     val cardColor = if (isDarkMode) HomeDarkCard else Color.White
     val softCard = if (isDarkMode) HomeDarkSoft else Color(0xFFECECEC)
@@ -335,7 +350,12 @@ fun HomeScreen(
                         color = textSecondary,
                         fontSize = 14.sp
                     )
-                    Text("Alex", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                    Text(
+                        "Alex",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textPrimary
+                    )
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
@@ -368,7 +388,8 @@ fun HomeScreen(
                 ) {
                     Text("Balance General", color = textSecondary)
                     Text(
-                        "S/ 1,250.75",
+                        // 👉 Balance real del mes
+                        "S/ ${"%,.2f".format(balance)}",
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,
                         color = textPrimary
@@ -381,7 +402,10 @@ fun HomeScreen(
             // ================= BOTONES =================
             Row(Modifier.fillMaxWidth()) {
                 Button(
-                    onClick = {},
+                    onClick = {
+                        // Aquí luego llamaremos a registrarTransaccion (INGRESO)
+                        // viewModel.registrarTransaccion(...)
+                    },
                     colors = ButtonDefaults.buttonColors(HomeAccentGreen),
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp)
@@ -390,7 +414,9 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.width(10.dp))
 
                 Button(
-                    onClick = {},
+                    onClick = {
+                        // Aquí luego llamaremos a registrarTransaccion (EGRESO)
+                    },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = softCard,
                         contentColor = if (isDarkMode) Color.White else Color.Black
@@ -443,6 +469,7 @@ fun HomeScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             DonutChartPremium(
+                                // Por ahora valores de ejemplo; luego se pueden mapear a categorías reales
                                 values = listOf(350f, 280f, 150f, 60f),
                                 colors = listOf(
                                     Color(0xFFE74C3C), // Transporte
@@ -455,9 +482,10 @@ fun HomeScreen(
                             )
 
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Total", color = textSecondary, fontSize = 12.sp)
+                                Text("Total gastado", color = textSecondary, fontSize = 12.sp)
                                 Text(
-                                    "S/ 840.50",
+                                    // 👉 Total de Egresos del mes
+                                    "S/ ${"%,.2f".format(totalEgresos)}",
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = textPrimary
@@ -550,3 +578,4 @@ fun HomeScreen(
         }
     }
 }
+
