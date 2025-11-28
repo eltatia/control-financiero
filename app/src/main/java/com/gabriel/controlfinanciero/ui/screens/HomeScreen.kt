@@ -13,11 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -30,6 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 // Colores modo oscuro para Home (parecidos a Reportes/Calendario)
 private val HomeDarkBackground = Color(0xFF021712)
@@ -115,30 +115,24 @@ fun DonutChartPremium(
 }
 
 // =============================================================
-//                  MODELO: ÚLTIMOS MOVIMIENTOS
+//                  MODELO: ÚLTIMOS MOVIMIENTOS (UI)
 // =============================================================
-data class Movimiento(
+data class MovimientoUi(
     val titulo: String,
-    val fecha: String,
-    val monto: Float,
-    val tipo: String // "ingreso" o "egreso"
-)
-
-val movimientosRecientes = listOf(
-    Movimiento("Salario", "Hoy", 2500f, "ingreso"),
-    Movimiento("Gasolina", "Ayer", 45.50f, "egreso"),
-    Movimiento("Cena", "Hace 2 días", 82.30f, "egreso")
+    val fechaTexto: String,
+    val monto: Double,
+    val tipo: String // "INGRESO" o "EGRESO"
 )
 
 @Composable
-fun MovimientoItem(mov: Movimiento, darkMode: Boolean) {
+fun MovimientoItem(mov: MovimientoUi, darkMode: Boolean) {
     val colorIngreso = if (darkMode) HomeAccentGreen else Color(0xFF16A34A)
     val colorEgreso = Color(0xFFEF4444)
 
-    val colorMonto = if (mov.tipo == "ingreso") colorIngreso else colorEgreso
-    val signo = if (mov.tipo == "ingreso") "+" else "−"
+    val colorMonto = if (mov.tipo == "INGRESO") colorIngreso else colorEgreso
+    val signo = if (mov.tipo == "INGRESO") "+" else "−"
 
-    val circleBg = if (mov.tipo == "ingreso") {
+    val circleBg = if (mov.tipo == "INGRESO") {
         if (darkMode) Color(0xFF064E3B) else Color(0xFFDFF6E6)
     } else {
         if (darkMode) Color(0xFF7F1D1D) else Color(0xFFFBE3E3)
@@ -175,7 +169,7 @@ fun MovimientoItem(mov: Movimiento, darkMode: Boolean) {
                 color = if (darkMode) Color.White else Color.Black
             )
             Text(
-                mov.fecha,
+                mov.fechaTexto,
                 color = if (darkMode) HomeTextMuted else Color.Gray,
                 fontSize = 13.sp
             )
@@ -286,6 +280,22 @@ private fun LegendRow(label: String, amount: String, color: Color, darkMode: Boo
 }
 
 // =============================================================
+//                 FORMATEO SENCILLO DE FECHAS
+// =============================================================
+private fun formatFechaCorta(millis: Long): String {
+    val zone = ZoneId.systemDefault()
+    val fecha = Instant.ofEpochMilli(millis).atZone(zone).toLocalDate()
+    val hoy = LocalDate.now()
+    val ayer = hoy.minusDays(1)
+
+    return when (fecha) {
+        hoy -> "Hoy"
+        ayer -> "Ayer"
+        else -> fecha.format(DateTimeFormatter.ofPattern("dd/MM"))
+    }
+}
+
+// =============================================================
 //                      HOME SCREEN COMPLETO
 // =============================================================
 @Composable
@@ -298,17 +308,39 @@ fun HomeScreen(
     val totalIngresos by viewModel.totalIngresosMes.collectAsState()
     val totalEgresos by viewModel.totalEgresosMes.collectAsState()
     val balance by viewModel.balanceMes.collectAsState()
+    val transaccionesMes by viewModel.transaccionesMes.collectAsState()
+    val cuentas by viewModel.cuentas.collectAsState()
 
     // Cargar datos del mes actual al entrar a Home
     LaunchedEffect(Unit) {
         viewModel.cargarDatosMes()
     }
 
+    // Estado para el diálogo de nuevo movimiento
+    var showMovimientoDialog by remember { mutableStateOf(false) }
+    var esIngreso by remember { mutableStateOf(true) }
+    var tituloMov by remember { mutableStateOf("") }
+    var montoMovTexto by remember { mutableStateOf("") }
+    var categoriaMov by remember { mutableStateOf("") }
+    var cuentaIndex by remember { mutableStateOf(0) }
+
     val bgColor = if (isDarkMode) HomeDarkBackground else Color(0xFFF3F6FF)
     val cardColor = if (isDarkMode) HomeDarkCard else Color.White
     val softCard = if (isDarkMode) HomeDarkSoft else Color(0xFFECECEC)
     val textPrimary = if (isDarkMode) Color.White else Color.Black
     val textSecondary = if (isDarkMode) HomeTextMuted else Color.Gray
+
+    val movimientosUi = transaccionesMes
+        .sortedByDescending { it.fecha }
+        .take(5)
+        .map {
+            MovimientoUi(
+                titulo = it.titulo,
+                fechaTexto = formatFechaCorta(it.fecha),
+                monto = it.monto,
+                tipo = it.tipo
+            )
+        }
 
     Box(
         modifier = Modifier
@@ -403,8 +435,8 @@ fun HomeScreen(
             Row(Modifier.fillMaxWidth()) {
                 Button(
                     onClick = {
-                        // Aquí luego llamaremos a registrarTransaccion (INGRESO)
-                        // viewModel.registrarTransaccion(...)
+                        esIngreso = true
+                        showMovimientoDialog = true
                     },
                     colors = ButtonDefaults.buttonColors(HomeAccentGreen),
                     modifier = Modifier.weight(1f),
@@ -415,7 +447,8 @@ fun HomeScreen(
 
                 Button(
                     onClick = {
-                        // Aquí luego llamaremos a registrarTransaccion (EGRESO)
+                        esIngreso = false
+                        showMovimientoDialog = true
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = softCard,
@@ -469,7 +502,7 @@ fun HomeScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             DonutChartPremium(
-                                // Por ahora valores de ejemplo; luego se pueden mapear a categorías reales
+                                // De momento valores de ejemplo; centro usa totalEgresos real
                                 values = listOf(350f, 280f, 150f, 60f),
                                 colors = listOf(
                                     Color(0xFFE74C3C), // Transporte
@@ -495,7 +528,7 @@ fun HomeScreen(
 
                         Spacer(modifier = Modifier.width(16.dp))
 
-                        // LEYENDA
+                        // LEYENDA (ejemplo estático)
                         Column(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -511,7 +544,7 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ================= ÚLTIMOS MOVIMIENTOS =================
+            // ================= ÚLTIMOS MOVIMIENTOS (REALES) =================
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = cardColor),
@@ -540,13 +573,21 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    movimientosRecientes.forEachIndexed { index, mov ->
-                        MovimientoItem(mov, darkMode = isDarkMode)
-                        if (index != movimientosRecientes.lastIndex)
-                            Divider(
-                                color = if (isDarkMode) HomeDarkSoft else Color(0xFFECECEC),
-                                thickness = 1.dp
-                            )
+                    if (movimientosUi.isEmpty()) {
+                        Text(
+                            text = "Aún no has registrado movimientos este mes.",
+                            color = textSecondary,
+                            fontSize = 14.sp
+                        )
+                    } else {
+                        movimientosUi.forEachIndexed { index, mov ->
+                            MovimientoItem(mov, darkMode = isDarkMode)
+                            if (index != movimientosUi.lastIndex)
+                                Divider(
+                                    color = if (isDarkMode) HomeDarkSoft else Color(0xFFECECEC),
+                                    thickness = 1.dp
+                                )
+                        }
                     }
                 }
             }
@@ -577,5 +618,135 @@ fun HomeScreen(
             }
         }
     }
+
+    // ================= DIÁLOGO NUEVO MOVIMIENTO =================
+    if (showMovimientoDialog) {
+        AlertDialog(
+            onDismissRequest = { showMovimientoDialog = false },
+            title = { Text(if (esIngreso) "Nuevo ingreso" else "Nuevo egreso") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = tituloMov,
+                        onValueChange = { tituloMov = it },
+                        label = { Text("Título") },
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = montoMovTexto,
+                        onValueChange = { montoMovTexto = it },
+                        label = { Text("Monto (S/)") },
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = categoriaMov,
+                        onValueChange = { categoriaMov = it },
+                        label = { Text("Categoría (ej. Comida)") },
+                        singleLine = true
+                    )
+
+                    if (cuentas.isEmpty()) {
+                        Text(
+                            "Primero crea una cuenta en la pestaña Cuentas para poder asociar el movimiento.",
+                            color = Color.Red,
+                            fontSize = 12.sp
+                        )
+                    } else {
+                        Text(
+                            "Cuenta",
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                        // selector súper simple por ahora (solo texto con índice)
+                        DropdownMenuCuentaSelector(
+                            cuentasNombres = cuentas.map { it.nombre },
+                            selectedIndex = cuentaIndex,
+                            onIndexSelected = { cuentaIndex = it }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = cuentas.isNotEmpty(),
+                    onClick = {
+                        val monto = montoMovTexto.replace(",", ".")
+                            .toDoubleOrNull() ?: 0.0
+                        val tituloFinal =
+                            if (tituloMov.isBlank())
+                                if (esIngreso) "Ingreso" else "Egreso"
+                            else
+                                tituloMov.trim()
+                        val categoriaFinal =
+                            if (categoriaMov.isBlank())
+                                if (esIngreso) "General" else "Gasto"
+                            else
+                                categoriaMov.trim()
+
+                        val cuentaId = cuentas.getOrNull(cuentaIndex)?.id ?: 0
+
+                        viewModel.registrarTransaccion(
+                            titulo = tituloFinal,
+                            monto = monto,
+                            tipo = if (esIngreso) "INGRESO" else "EGRESO",
+                            categoria = categoriaFinal,
+                            cuentaId = cuentaId
+                        )
+
+                        // reset
+                        tituloMov = ""
+                        montoMovTexto = ""
+                        categoriaMov = ""
+                        cuentaIndex = 0
+                        showMovimientoDialog = false
+                    }
+                ) {
+                    Text("Guardar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMovimientoDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
+// =============================================================
+//        SELECTOR SIMPLE DE CUENTAS PARA EL DIÁLOGO
+// =============================================================
+@Composable
+private fun DropdownMenuCuentaSelector(
+    cuentasNombres: List<String>,
+    selectedIndex: Int,
+    onIndexSelected: (Int) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    OutlinedButton(
+        onClick = { expanded = true }
+    ) {
+        Text(
+            text = cuentasNombres.getOrNull(selectedIndex) ?: "Seleccionar cuenta",
+            modifier = Modifier.weight(1f)
+        )
+        Text("▾")
+    }
+
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = { expanded = false }
+    ) {
+        cuentasNombres.forEachIndexed { index, nombre ->
+            DropdownMenuItem(
+                text = { Text(nombre) },
+                onClick = {
+                    onIndexSelected(index)
+                    expanded = false
+                }
+            )
+        }
+    }
+}
