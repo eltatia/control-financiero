@@ -44,6 +44,18 @@ class FinanceViewModel(
         }
     }
 
+    fun actualizarCuenta(cuenta: CuentaEntity) {
+        viewModelScope.launch {
+            repository.actualizarCuenta(cuenta)
+        }
+    }
+
+    fun eliminarCuenta(cuenta: CuentaEntity) {
+        viewModelScope.launch {
+            repository.eliminarCuenta(cuenta)
+        }
+    }
+
     // ------------------- TRANSACCIONES DEL MES -------------------
 
     private val _transaccionesMes = MutableStateFlow<List<TransaccionEntity>>(emptyList())

@@ -28,6 +28,14 @@ class FinanceRepository private constructor(
         db.cuentaDao().insertar(cuenta)
     }
 
+    suspend fun actualizarCuenta(cuenta: CuentaEntity) {
+        db.cuentaDao().actualizar(cuenta)
+    }
+
+    suspend fun eliminarCuenta(cuenta: CuentaEntity) {
+        db.cuentaDao().eliminar(cuenta)
+    }
+
     // ------------------- TRANSACCIONES -------------------
 
     fun obtenerTransaccionesRango(

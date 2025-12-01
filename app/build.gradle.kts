@@ -82,5 +82,8 @@ dependencies {
     // ViewModel para Jetpack Compose
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
 
+    implementation("androidx.compose.material:material:1.6.8") // o la versión que uses en tu BOM
+
+
 }
 

@@ -7,13 +7,25 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
+
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
+
+
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
 import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
 
 // Colores coherentes
@@ -54,11 +67,18 @@ fun CuentasScreen(
     val textPrimary = if (isDarkMode) Color.White else Color.Black
     val textMutedColor = if (isDarkMode) TextMuted else Color.Gray
 
-    // Estado para el diálogo de nueva cuenta
+    // ================= ESTADOS FORMULARIO =================
     var showNuevaCuentaDialog by remember { mutableStateOf(false) }
     var nuevaCuentaNombre by remember { mutableStateOf("") }
     var nuevaCuentaSaldoText by remember { mutableStateOf("") }
-    var nuevaCuentaTipo by remember { mutableStateOf("EFECTIVO") }
+
+    // chip seleccionado: EFECTIVO / BANCO / BILLETERA / OTROS
+    var tipoCuentaSeleccionado by remember { mutableStateOf("EFECTIVO") }
+    var tipoCuentaPersonalizado by remember { mutableStateOf("") }
+
+    // modo edición: si es null, estamos creando; si tiene valor, editamos
+    var indiceEdicion by remember { mutableStateOf<Int?>(null) }
+    var cuentaEnEdicion by remember { mutableStateOf<CuentaEntity?>(null) }
 
     Box(
         modifier = Modifier
@@ -150,8 +170,8 @@ fun CuentasScreen(
                     fontSize = 14.sp
                 )
             } else {
-                cuentas.forEach { cuenta ->
-                    AccountItemCard(
+                cuentas.forEachIndexed { index, cuenta ->
+                    SwipeableAccountItem(
                         icon = Icons.Default.AccountBalanceWallet,
                         iconBgColor = Color(0xFF16A34A),
                         titulo = cuenta.nombre,
@@ -159,7 +179,27 @@ fun CuentasScreen(
                         monto = cuenta.saldoInicial,
                         cardColor = cardColor,
                         textPrimary = textPrimary,
-                        textMutedColor = textMutedColor
+                        textMutedColor = textMutedColor,
+                        onEdit = {
+                            // Preparamos el formulario en modo edición
+                            indiceEdicion = index
+                            cuentaEnEdicion = cuenta
+                            nuevaCuentaNombre = cuenta.nombre
+                            nuevaCuentaSaldoText = cuenta.saldoInicial.toString()
+
+                            if (cuenta.tipo in listOf("EFECTIVO", "BANCO", "BILLETERA")) {
+                                tipoCuentaSeleccionado = cuenta.tipo
+                                tipoCuentaPersonalizado = ""
+                            } else {
+                                tipoCuentaSeleccionado = "OTROS"
+                                tipoCuentaPersonalizado = cuenta.tipo
+                            }
+
+                            showNuevaCuentaDialog = true
+                        },
+                        onDelete = {
+                            viewModel.eliminarCuenta(cuenta)
+                        }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
@@ -200,7 +240,13 @@ fun CuentasScreen(
                     .clip(RoundedCornerShape(20.dp))
                     .background(AccentGreen)
                     .clickable {
-                        // Abrimos diálogo para crear cuenta con datos reales
+                        // Modo creación (reseteamos todo)
+                        indiceEdicion = null
+                        cuentaEnEdicion = null
+                        nuevaCuentaNombre = ""
+                        nuevaCuentaSaldoText = ""
+                        tipoCuentaSeleccionado = "EFECTIVO"
+                        tipoCuentaPersonalizado = ""
                         showNuevaCuentaDialog = true
                     },
                 contentAlignment = Alignment.Center
@@ -214,11 +260,17 @@ fun CuentasScreen(
         }
     }
 
-    // ================= DIÁLOGO NUEVA CUENTA =================
+    // ================= DIÁLOGO NUEVA / EDITAR CUENTA =================
     if (showNuevaCuentaDialog) {
         AlertDialog(
-            onDismissRequest = { showNuevaCuentaDialog = false },
-            title = { Text("Nueva cuenta") },
+            onDismissRequest = {
+                showNuevaCuentaDialog = false
+                indiceEdicion = null
+                cuentaEnEdicion = null
+            },
+            title = {
+                Text(if (indiceEdicion == null) "Nueva cuenta" else "Editar cuenta")
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
@@ -231,7 +283,7 @@ fun CuentasScreen(
                     OutlinedTextField(
                         value = nuevaCuentaSaldoText,
                         onValueChange = { nuevaCuentaSaldoText = it },
-                        label = { Text("Saldo inicial (S/)") },
+                        label = { Text("Saldo (S/)") },
                         singleLine = true
                     )
 
@@ -245,18 +297,43 @@ fun CuentasScreen(
                     ) {
                         TipoChip(
                             label = "EFECTIVO",
-                            selected = nuevaCuentaTipo == "EFECTIVO"
-                        ) { nuevaCuentaTipo = "EFECTIVO" }
+                            selected = tipoCuentaSeleccionado == "EFECTIVO"
+                        ) {
+                            tipoCuentaSeleccionado = "EFECTIVO"
+                            tipoCuentaPersonalizado = ""
+                        }
 
                         TipoChip(
                             label = "BANCO",
-                            selected = nuevaCuentaTipo == "BANCO"
-                        ) { nuevaCuentaTipo = "BANCO" }
+                            selected = tipoCuentaSeleccionado == "BANCO"
+                        ) {
+                            tipoCuentaSeleccionado = "BANCO"
+                            tipoCuentaPersonalizado = ""
+                        }
 
                         TipoChip(
                             label = "BILLETERA",
-                            selected = nuevaCuentaTipo == "BILLETERA"
-                        ) { nuevaCuentaTipo = "BILLETERA" }
+                            selected = tipoCuentaSeleccionado == "BILLETERA"
+                        ) {
+                            tipoCuentaSeleccionado = "BILLETERA"
+                            tipoCuentaPersonalizado = ""
+                        }
+
+                        TipoChip(
+                            label = "OTROS",
+                            selected = tipoCuentaSeleccionado == "OTROS"
+                        ) {
+                            tipoCuentaSeleccionado = "OTROS"
+                        }
+                    }
+
+                    if (tipoCuentaSeleccionado == "OTROS") {
+                        OutlinedTextField(
+                            value = tipoCuentaPersonalizado,
+                            onValueChange = { tipoCuentaPersonalizado = it },
+                            label = { Text("Especifica el tipo de cuenta") },
+                            singleLine = true
+                        )
                     }
                 }
             },
@@ -271,16 +348,38 @@ fun CuentasScreen(
                             else
                                 nuevaCuentaNombre.trim()
 
-                        viewModel.crearCuenta(
-                            nombre = nombreFinal,
-                            tipo = nuevaCuentaTipo,
-                            saldoInicial = saldo
-                        )
+                        val tipoFinal = if (tipoCuentaSeleccionado == "OTROS") {
+                            tipoCuentaPersonalizado.trim().ifBlank { "OTROS" }
+                        } else {
+                            tipoCuentaSeleccionado
+                        }
+
+                        if (indiceEdicion == null) {
+                            // Crear nueva cuenta
+                            viewModel.crearCuenta(
+                                nombre = nombreFinal,
+                                tipo = tipoFinal,
+                                saldoInicial = saldo
+                            )
+                        } else {
+                            // Actualizar cuenta existente
+                            cuentaEnEdicion?.let { original ->
+                                val actualizada = original.copy(
+                                    nombre = nombreFinal,
+                                    tipo = tipoFinal,
+                                    saldoInicial = saldo
+                                )
+                                viewModel.actualizarCuenta(actualizada)
+                            }
+                        }
 
                         // Limpiamos estado
+                        indiceEdicion = null
+                        cuentaEnEdicion = null
                         nuevaCuentaNombre = ""
                         nuevaCuentaSaldoText = ""
-                        nuevaCuentaTipo = "EFECTIVO"
+                        tipoCuentaSeleccionado = "EFECTIVO"
+                        tipoCuentaPersonalizado = ""
                         showNuevaCuentaDialog = false
                     }
                 ) {
@@ -288,7 +387,11 @@ fun CuentasScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showNuevaCuentaDialog = false }) {
+                TextButton(onClick = {
+                    showNuevaCuentaDialog = false
+                    indiceEdicion = null
+                    cuentaEnEdicion = null
+                }) {
                     Text("Cancelar")
                 }
             }
@@ -371,10 +474,11 @@ private fun AccountItemCard(
     monto: Double,
     cardColor: Color,
     textPrimary: Color,
-    textMutedColor: Color
+    textMutedColor: Color,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = cardColor)
     ) {
@@ -562,5 +666,101 @@ private fun DebtCardCredit(
                 }
             }
         }
+    }
+}
+// =============================================================
+//     ITEM SWIPEABLE PERSONALIZADO (EDITAR / ELIMINAR)
+//     - Deslizas a la izquierda y se queda abierto
+// =============================================================
+@Composable
+private fun SwipeableAccountItem(
+    icon: ImageVector,
+    iconBgColor: Color,
+    titulo: String,
+    subtitulo: String,
+    monto: Double,
+    cardColor: Color,
+    textPrimary: Color,
+    textMutedColor: Color,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+
+    // Ancho del área de acciones (edit/eliminar) que se va a revelar
+    val actionWidth = 140.dp
+    val maxOffsetPx = with(density) { -actionWidth.toPx() } // negativo (hacia la izquierda)
+
+    val offsetX = remember { Animatable(0f) } // 0 = cerrado, valor negativo = abierto
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+
+                        // Nuevo valor limitado entre 0 y maxOffsetPx (negativo)
+                        val newOffset = (offsetX.value + dragAmount)
+                            .coerceIn(maxOffsetPx, 0f)
+
+                        scope.launch {
+                            offsetX.snapTo(newOffset)
+                        }
+                    },
+                    onDragEnd = {
+                        scope.launch {
+                            // Si arrastraste más de la mitad, se queda abierto
+                            if (offsetX.value < maxOffsetPx / 2f) {
+                                offsetX.animateTo(maxOffsetPx)
+                            } else {
+                                offsetX.animateTo(0f)
+                            }
+                        }
+                    }
+                )
+            }
+    ) {
+        // FONDO: botones de editar y eliminar (siempre ocupan el ancho de actionWidth)
+        Row(
+            modifier = Modifier
+                .matchParentSize()
+                .padding(end = 8.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onEdit) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Editar cuenta",
+                    tint = Color(0xFF22C55E)
+                )
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Eliminar cuenta",
+                    tint = Color(0xFFEF4444)
+                )
+            }
+        }
+
+        // CONTENIDO: la tarjeta de la cuenta, se desplaza a la izquierda según offsetX
+        AccountItemCard(
+            icon = icon,
+            iconBgColor = iconBgColor,
+            titulo = titulo,
+            subtitulo = subtitulo,
+            monto = monto,
+            cardColor = cardColor,
+            textPrimary = textPrimary,
+            textMutedColor = textMutedColor,
+            modifier = Modifier.offset {
+                IntOffset(offsetX.value.roundToInt(), 0)
+            }
+        )
     }
 }
