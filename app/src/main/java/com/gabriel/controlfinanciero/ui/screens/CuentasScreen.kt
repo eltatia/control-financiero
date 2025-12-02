@@ -1,7 +1,9 @@
 package com.gabriel.controlfinanciero.ui.screens
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,34 +12,28 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
-
-import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
-import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
-
-
-
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
+import com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity
 import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 // Colores coherentes
 private val AccountsBackground = Color(0xFF021712)
@@ -57,9 +53,17 @@ fun CuentasScreen(
 ) {
     val cuentas by viewModel.cuentas.collectAsState()
 
-    // Totales calculados a partir de las cuentas
-    val totalActivos = cuentas.sumOf { it.saldoInicial }
-    val totalPasivos = 8300.0 // de momento fijo
+    // Totales anuales (ingresos y egresos)
+    val totalIngresosAnual by viewModel.totalIngresosAnual.collectAsState()
+    val totalEgresosAnual by viewModel.totalEgresosAnual.collectAsState()
+
+    // Todas las transacciones (para calcular saldo actual por cuenta)
+    val todasTransacciones by viewModel.todasTransacciones.collectAsState()
+
+    // Cargar datos del año actual cuando se entra a la pantalla
+    LaunchedEffect(Unit) {
+        viewModel.cargarDatosAnuales()
+    }
 
     val bgColor = if (isDarkMode) AccountsBackground else Color(0xFFF3F6FF)
     val cardColor = if (isDarkMode) CardDark else Color.White
@@ -67,7 +71,7 @@ fun CuentasScreen(
     val textPrimary = if (isDarkMode) Color.White else Color.Black
     val textMutedColor = if (isDarkMode) TextMuted else Color.Gray
 
-    // ================= ESTADOS FORMULARIO =================
+    // ================= ESTADOS FORMULARIO CUENTAS =================
     var showNuevaCuentaDialog by remember { mutableStateOf(false) }
     var nuevaCuentaNombre by remember { mutableStateOf("") }
     var nuevaCuentaSaldoText by remember { mutableStateOf("") }
@@ -119,9 +123,9 @@ fun CuentasScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // ================= TU PATRIMONIO =================
+            // ================= RESUMEN ANUAL =================
             Text(
-                text = "Tu Patrimonio",
+                text = "Resumen anual",
                 color = textPrimary,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 18.sp
@@ -134,16 +138,16 @@ fun CuentasScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 PatrimonioCard(
-                    titulo = "Total Activos",
-                    monto = totalActivos,
+                    titulo = "Ingresos del año",
+                    monto = totalIngresosAnual,
                     colorMonto = AccentGreen,
                     modifier = Modifier.weight(1f),
                     cardColor = cardColor,
                     textMutedColor = textMutedColor
                 )
                 PatrimonioCard(
-                    titulo = "Total Pasivos",
-                    monto = totalPasivos,
+                    titulo = "Egresos del año",
+                    monto = totalEgresosAnual,
                     colorMonto = AccentRed,
                     modifier = Modifier.weight(1f),
                     cardColor = cardColor,
@@ -171,12 +175,16 @@ fun CuentasScreen(
                 )
             } else {
                 cuentas.forEachIndexed { index, cuenta ->
+
+                    // 🔹 Saldo actual = saldoInicial + ingresos - egresos de esa cuenta
+                    val saldoActual = calcularSaldoActual(cuenta, todasTransacciones)
+
                     SwipeableAccountItem(
                         icon = Icons.Default.AccountBalanceWallet,
                         iconBgColor = Color(0xFF16A34A),
                         titulo = cuenta.nombre,
                         subtitulo = cuenta.tipo,
-                        monto = cuenta.saldoInicial,
+                        monto = saldoActual,
                         cardColor = cardColor,
                         textPrimary = textPrimary,
                         textMutedColor = textMutedColor,
@@ -668,9 +676,9 @@ private fun DebtCardCredit(
         }
     }
 }
+
 // =============================================================
 //     ITEM SWIPEABLE PERSONALIZADO (EDITAR / ELIMINAR)
-//     - Deslizas a la izquierda y se queda abierto
 // =============================================================
 @Composable
 private fun SwipeableAccountItem(
@@ -763,4 +771,20 @@ private fun SwipeableAccountItem(
             }
         )
     }
+}
+
+// =============================================================
+//      HELPER: CALCULAR SALDO ACTUAL POR CUENTA
+// =============================================================
+private fun calcularSaldoActual(
+    cuenta: CuentaEntity,
+    transacciones: List<TransaccionEntity>
+): Double {
+    val movimiento = transacciones
+        .filter { it.cuentaId == cuenta.id }
+        .sumOf { trans ->
+            if (trans.tipo == "INGRESO") trans.monto else -trans.monto
+        }
+
+    return cuenta.saldoInicial + movimiento
 }

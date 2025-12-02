@@ -55,6 +55,10 @@ class FinanceRepository private constructor(
     ): Flow<Double?> =
         db.transaccionDao().obtenerTotalPorTipoYRangoFecha(tipo, desde, hasta)
 
+    // 🔹 NUEVO: obtener todas las transacciones (para saldo actual por cuenta)
+    fun obtenerTodasTransacciones(): Flow<List<TransaccionEntity>> =
+        db.transaccionDao().obtenerTodas()
+
     // ------------------- SINGLETON -------------------
 
     companion object {

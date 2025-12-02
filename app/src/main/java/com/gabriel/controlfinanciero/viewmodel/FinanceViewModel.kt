@@ -25,11 +25,23 @@ class FinanceViewModel(
     private val _cuentas = MutableStateFlow<List<CuentaEntity>>(emptyList())
     val cuentas: StateFlow<List<CuentaEntity>> = _cuentas.asStateFlow()
 
+    // ------------------- TODAS LAS TRANSACCIONES (para saldo actual por cuenta) -------------------
+
+    private val _todasTransacciones = MutableStateFlow<List<TransaccionEntity>>(emptyList())
+    val todasTransacciones: StateFlow<List<TransaccionEntity>> = _todasTransacciones.asStateFlow()
+
     init {
         // Escuchamos las cuentas de Room
         viewModelScope.launch {
             repository.obtenerCuentas().collect { lista ->
                 _cuentas.value = lista
+            }
+        }
+
+        // Escuchamos todas las transacciones de Room
+        viewModelScope.launch {
+            repository.obtenerTodasTransacciones().collect { lista ->
+                _todasTransacciones.value = lista
             }
         }
     }
@@ -96,6 +108,43 @@ class FinanceViewModel(
             }
         }
     }
+
+    // ------------------- TRANSACCIONES ANUALES -------------------
+
+    private val _totalIngresosAnual = MutableStateFlow(0.0)
+    val totalIngresosAnual: StateFlow<Double> = _totalIngresosAnual.asStateFlow()
+
+    private val _totalEgresosAnual = MutableStateFlow(0.0)
+    val totalEgresosAnual: StateFlow<Double> = _totalEgresosAnual.asStateFlow()
+
+    private val _balanceAnual = MutableStateFlow(0.0)
+    val balanceAnual: StateFlow<Double> = _balanceAnual.asStateFlow()
+
+    /**
+     * Carga las transacciones del año dado (por defecto el año actual)
+     * y recalcula ingresos, egresos y balance anual.
+     */
+    fun cargarDatosAnuales(anio: Int = LocalDate.now().year) {
+        val firstDay = LocalDate.of(anio, 1, 1)
+        val lastDay = LocalDate.of(anio, 12, 31)
+
+        val zoneId = ZoneId.systemDefault()
+        val desde = firstDay.atStartOfDay(zoneId).toInstant().toEpochMilli()
+        val hasta = lastDay.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
+
+        viewModelScope.launch {
+            repository.obtenerTransaccionesRango(desde, hasta).collect { lista ->
+                val ingresos = lista.filter { it.tipo == "INGRESO" }.sumOf { it.monto }
+                val egresos = lista.filter { it.tipo == "EGRESO" }.sumOf { it.monto }
+
+                _totalIngresosAnual.value = ingresos
+                _totalEgresosAnual.value = egresos
+                _balanceAnual.value = ingresos - egresos
+            }
+        }
+    }
+
+    // ------------------- REGISTRAR TRANSACCIÓN -------------------
 
     /**
      * Agrega una nueva transacción (ingreso o egreso) a la base de datos.

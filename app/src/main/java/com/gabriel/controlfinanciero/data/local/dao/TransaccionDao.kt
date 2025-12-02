@@ -19,6 +19,7 @@ interface TransaccionDao {
     @Delete
     suspend fun eliminar(transaccion: TransaccionEntity)
 
+    // 🔹 Todas las transacciones (la usaremos para saldo actual por cuenta)
     @Query("SELECT * FROM transacciones ORDER BY fecha DESC")
     fun obtenerTodas(): Flow<List<TransaccionEntity>>
 
