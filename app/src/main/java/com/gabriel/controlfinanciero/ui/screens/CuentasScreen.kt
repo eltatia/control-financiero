@@ -11,7 +11,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
@@ -30,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
+import com.gabriel.controlfinanciero.data.local.entities.DeudaEntity
 import com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity
 import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
 import kotlinx.coroutines.launch
@@ -52,6 +52,7 @@ fun CuentasScreen(
     viewModel: FinanceViewModel = viewModel()
 ) {
     val cuentas by viewModel.cuentas.collectAsState()
+    val deudas by viewModel.deudas.collectAsState()
 
     // Totales anuales (ingresos y egresos)
     val totalIngresosAnual by viewModel.totalIngresosAnual.collectAsState()
@@ -83,6 +84,20 @@ fun CuentasScreen(
     // modo edición: si es null, estamos creando; si tiene valor, editamos
     var indiceEdicion by remember { mutableStateOf<Int?>(null) }
     var cuentaEnEdicion by remember { mutableStateOf<CuentaEntity?>(null) }
+
+    // ================= ESTADOS FORMULARIO DEUDAS =================
+    var showNuevaDeudaDialog by remember { mutableStateOf(false) }
+    var nuevaDeudaNombre by remember { mutableStateOf("") }
+    var nuevaDeudaMontoText by remember { mutableStateOf("") }
+    var tipoDeudaSeleccionado by remember { mutableStateOf("DEUDA") } // DEUDA o PRESTAMO
+
+    // Abono de deudas
+    var showAbonoDeudaDialog by remember { mutableStateOf(false) }
+    var deudaSeleccionadaAbono by remember { mutableStateOf<DeudaEntity?>(null) }
+    var montoAbonoText by remember { mutableStateOf("") }
+
+    // ================= ESTADO MENÚ DEL FAB =================
+    var fabMenuExpanded by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -225,45 +240,90 @@ fun CuentasScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            DebtCardCredit(
-                cardColor = cardColor,
-                softCardColor = softCardColor,
-                textPrimary = textPrimary,
-                textMutedColor = textMutedColor
-            )
+            if (deudas.isEmpty()) {
+                Text(
+                    text = "Aún no tienes deudas registradas.\nUsa el botón + para agregar una.",
+                    color = textMutedColor,
+                    fontSize = 14.sp
+                )
+            } else {
+                deudas.forEach { deuda ->
+                    DeudaItem(
+                        deuda = deuda,
+                        cardColor = cardColor,
+                        textPrimary = textPrimary,
+                        textMutedColor = textMutedColor,
+                        onAbonar = {
+                            deudaSeleccionadaAbono = deuda
+                            montoAbonoText = deuda.montoPendiente.toString()
+                            showAbonoDeudaDialog = true
+                        },
+                        onEliminar = {
+                            viewModel.eliminarDeuda(deuda)
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
 
             Spacer(modifier = Modifier.height(80.dp)) // espacio para el FAB
         }
 
-        // ================= FAB (+) =================
+        // ================= FAB (+) CON MENÚ =================
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(24.dp),
             contentAlignment = Alignment.BottomEnd
         ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(AccentGreen)
-                    .clickable {
-                        // Modo creación (reseteamos todo)
-                        indiceEdicion = null
-                        cuentaEnEdicion = null
-                        nuevaCuentaNombre = ""
-                        nuevaCuentaSaldoText = ""
-                        tipoCuentaSeleccionado = "EFECTIVO"
-                        tipoCuentaPersonalizado = ""
-                        showNuevaCuentaDialog = true
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Añadir cuenta o deuda",
-                    tint = Color.Black
-                )
+            Box {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(AccentGreen)
+                        .clickable {
+                            fabMenuExpanded = !fabMenuExpanded
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Añadir cuenta o deuda",
+                        tint = Color.Black
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = fabMenuExpanded,
+                    onDismissRequest = { fabMenuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Nueva cuenta") },
+                        onClick = {
+                            fabMenuExpanded = false
+                            // Modo creación cuenta
+                            indiceEdicion = null
+                            cuentaEnEdicion = null
+                            nuevaCuentaNombre = ""
+                            nuevaCuentaSaldoText = ""
+                            tipoCuentaSeleccionado = "EFECTIVO"
+                            tipoCuentaPersonalizado = ""
+                            showNuevaCuentaDialog = true
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Nueva deuda / préstamo") },
+                        onClick = {
+                            fabMenuExpanded = false
+                            // Modo creación deuda
+                            nuevaDeudaNombre = ""
+                            nuevaDeudaMontoText = ""
+                            tipoDeudaSeleccionado = "DEUDA"
+                            showNuevaDeudaDialog = true
+                        }
+                    )
+                }
             }
         }
     }
@@ -405,10 +465,145 @@ fun CuentasScreen(
             }
         )
     }
+
+    // ================= DIÁLOGO NUEVA DEUDA / PRÉSTAMO =================
+    if (showNuevaDeudaDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showNuevaDeudaDialog = false
+            },
+            title = { Text("Nueva deuda / préstamo") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = nuevaDeudaNombre,
+                        onValueChange = { nuevaDeudaNombre = it },
+                        label = { Text("Nombre (ej. Préstamo moto)") },
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = nuevaDeudaMontoText,
+                        onValueChange = { nuevaDeudaMontoText = it },
+                        label = { Text("Monto total (S/)") },
+                        singleLine = true
+                    )
+
+                    Text(
+                        text = "Tipo",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TipoChip(
+                            label = "DEUDA",
+                            selected = tipoDeudaSeleccionado == "DEUDA"
+                        ) {
+                            tipoDeudaSeleccionado = "DEUDA"
+                        }
+                        TipoChip(
+                            label = "PRESTAMO",
+                            selected = tipoDeudaSeleccionado == "PRESTAMO"
+                        ) {
+                            tipoDeudaSeleccionado = "PRESTAMO"
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val monto = nuevaDeudaMontoText.replace(",", ".")
+                            .toDoubleOrNull() ?: 0.0
+                        val nombreFinal = nuevaDeudaNombre.trim()
+
+                        if (nombreFinal.isNotBlank() && monto > 0) {
+                            viewModel.crearDeuda(
+                                nombre = nombreFinal,
+                                montoTotal = monto,
+                                tipo = tipoDeudaSeleccionado
+                            )
+                            // limpiar
+                            nuevaDeudaNombre = ""
+                            nuevaDeudaMontoText = ""
+                            tipoDeudaSeleccionado = "DEUDA"
+                            showNuevaDeudaDialog = false
+                        }
+                    }
+                ) {
+                    Text("Guardar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNuevaDeudaDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // ================= DIÁLOGO ABONAR DEUDA =================
+    if (showAbonoDeudaDialog && deudaSeleccionadaAbono != null) {
+        val deuda = deudaSeleccionadaAbono!!
+        AlertDialog(
+            onDismissRequest = {
+                showAbonoDeudaDialog = false
+                deudaSeleccionadaAbono = null
+                montoAbonoText = ""
+            },
+            title = { Text("Abonar a ${deuda.nombre}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Pendiente actual: S/ ${"%,.2f".format(deuda.montoPendiente)}",
+                        color = textMutedColor
+                    )
+                    OutlinedTextField(
+                        value = montoAbonoText,
+                        onValueChange = { montoAbonoText = it },
+                        label = { Text("Monto del abono (S/)") },
+                        singleLine = true
+                    )
+                    Text(
+                        text = "Si el abono es igual o mayor al pendiente,\nla deuda se marcará como PAGADA.",
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val monto = montoAbonoText.replace(",", ".").toDoubleOrNull() ?: 0.0
+                        if (monto > 0.0) {
+                            viewModel.abonarDeuda(deuda, monto)
+                            showAbonoDeudaDialog = false
+                            deudaSeleccionadaAbono = null
+                            montoAbonoText = ""
+                        }
+                    }
+                ) {
+                    Text("Guardar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showAbonoDeudaDialog = false
+                        deudaSeleccionadaAbono = null
+                        montoAbonoText = ""
+                    }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
 // =============================================================
-//  CHIP SIMPLE PARA ELEGIR TIPO DE CUENTA
+//  CHIP SIMPLE PARA ELEGIR TIPO DE CUENTA / DEUDA
 // =============================================================
 @Composable
 private fun TipoChip(
@@ -539,17 +734,14 @@ private fun AccountItemCard(
 }
 
 @Composable
-private fun DebtCardCredit(
+private fun DeudaItem(
+    deuda: DeudaEntity,
     cardColor: Color,
-    softCardColor: Color,
     textPrimary: Color,
-    textMutedColor: Color
+    textMutedColor: Color,
+    onAbonar: () -> Unit,
+    onEliminar: () -> Unit
 ) {
-    val pagado = 5200f
-    val limite = 10000f
-    val pendiente = 4800f
-    val progreso = (pagado / limite).coerceIn(0f, 1f)
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
@@ -558,119 +750,55 @@ private fun DebtCardCredit(
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-
-            // Título + saldo pendiente
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFF7F1D1D).copy(alpha = 0.4f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CreditCard,
-                            contentDescription = null,
-                            tint = AccentRed
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(14.dp))
-
-                    Column {
-                        Text(
-                            text = "Tarjeta de Crédito",
-                            color = textPrimary,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp
-                        )
-                    }
-                }
-
-                Text(
-                    text = "S/ ${"%,.2f".format(pendiente)}",
-                    color = AccentRed,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Pagado / límite
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Pagado S/ ${"%,.2f".format(pagado)}",
-                    color = textMutedColor,
-                    fontSize = 13.sp
+                    text = deuda.nombre,
+                    color = textPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
                 )
                 Text(
-                    text = "de S/ ${"%,.2f".format(limite)}",
-                    color = textMutedColor,
-                    fontSize = 13.sp
+                    text = "S/ ${"%,.2f".format(deuda.montoPendiente)}",
+                    color = if (deuda.estado == "PAGADA") AccentGreen else AccentRed,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
                 )
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Barra de progreso
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(7.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(softCardColor)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(progreso)
-                        .fillMaxHeight()
-                        .background(AccentGreen)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Próximo pago + botón Pagar
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Tipo: " + if (deuda.tipo == "DEUDA") "Deuda" else "Préstamo",
+                color = textMutedColor,
+                fontSize = 13.sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = "Próximo pago: 15 de Julio",
-                        color = textPrimary,
-                        fontSize = 13.sp
-                    )
-                    Text(
-                        text = "Cuota mensual: S/ 450.00",
-                        color = textMutedColor,
-                        fontSize = 13.sp
-                    )
-                }
+                Text(
+                    text = "Estado: ${deuda.estado}",
+                    color = textMutedColor,
+                    fontSize = 13.sp
+                )
 
-                Button(
-                    onClick = { /* TODO: acción de pagar */ },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentGreen,
-                        contentColor = Color.Black
-                    ),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "Pagar",
-                        fontWeight = FontWeight.SemiBold
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = onAbonar,
+                        enabled = deuda.estado == "ACTIVA"
+                    ) {
+                        Text("Abonar")
+                    }
+                    IconButton(onClick = onEliminar) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Eliminar deuda",
+                            tint = AccentRed
+                        )
+                    }
                 }
             }
         }

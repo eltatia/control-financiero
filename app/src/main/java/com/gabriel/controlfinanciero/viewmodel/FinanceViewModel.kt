@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.gabriel.controlfinanciero.data.FinanceRepository
 import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
+import com.gabriel.controlfinanciero.data.local.entities.DeudaEntity
 import com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,26 +26,42 @@ class FinanceViewModel(
     private val _cuentas = MutableStateFlow<List<CuentaEntity>>(emptyList())
     val cuentas: StateFlow<List<CuentaEntity>> = _cuentas.asStateFlow()
 
+    // ------------------- DEUDAS / PRÉSTAMOS -------------------
+
+    private val _deudas = MutableStateFlow<List<DeudaEntity>>(emptyList())
+    val deudas: StateFlow<List<DeudaEntity>> = _deudas.asStateFlow()
+
     // ------------------- TODAS LAS TRANSACCIONES (para saldo actual por cuenta) -------------------
 
     private val _todasTransacciones = MutableStateFlow<List<TransaccionEntity>>(emptyList())
     val todasTransacciones: StateFlow<List<TransaccionEntity>> = _todasTransacciones.asStateFlow()
 
+    // ------------------- INIT -------------------
+
     init {
-        // Escuchamos las cuentas de Room
+        // Cuentas
         viewModelScope.launch {
             repository.obtenerCuentas().collect { lista ->
                 _cuentas.value = lista
             }
         }
 
-        // Escuchamos todas las transacciones de Room
+        // Todas las transacciones
         viewModelScope.launch {
             repository.obtenerTodasTransacciones().collect { lista ->
                 _todasTransacciones.value = lista
             }
         }
+
+        // Deudas / préstamos
+        viewModelScope.launch {
+            repository.obtenerDeudas().collect { lista ->
+                _deudas.value = lista
+            }
+        }
     }
+
+    // ------------------- OPERACIONES CUENTAS -------------------
 
     fun crearCuenta(
         nombre: String,
@@ -67,6 +84,42 @@ class FinanceViewModel(
             repository.eliminarCuenta(cuenta)
         }
     }
+
+    // ------------------- OPERACIONES DEUDAS -------------------
+
+    fun crearDeuda(
+        nombre: String,
+        montoTotal: Double,
+        tipo: String,                 // "DEUDA" o "PRESTAMO"
+        fechaVencimiento: Long? = null
+    ) {
+        viewModelScope.launch {
+            repository.crearDeuda(
+                nombre = nombre,
+                montoTotal = montoTotal,
+                tipo = tipo,
+                fechaVencimiento = fechaVencimiento
+            )
+        }
+    }
+
+    fun actualizarDeuda(deuda: DeudaEntity) {
+        viewModelScope.launch {
+            repository.actualizarDeuda(deuda)
+        }
+    }
+
+    fun eliminarDeuda(deuda: DeudaEntity) {
+        viewModelScope.launch {
+            repository.eliminarDeuda(deuda)
+        }
+    }
+    fun abonarDeuda(deuda: DeudaEntity, montoAbono: Double) {
+        viewModelScope.launch {
+            repository.abonarDeuda(deuda, montoAbono)
+        }
+    }
+
 
     // ------------------- TRANSACCIONES DEL MES -------------------
 

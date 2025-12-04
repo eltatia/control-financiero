@@ -5,22 +5,26 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.gabriel.controlfinanciero.data.local.dao.CuentaDao
+import com.gabriel.controlfinanciero.data.local.dao.DeudaDao
 import com.gabriel.controlfinanciero.data.local.dao.TransaccionDao
 import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
+import com.gabriel.controlfinanciero.data.local.entities.DeudaEntity
 import com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity
 
 @Database(
     entities = [
         TransaccionEntity::class,
-        CuentaEntity::class
+        CuentaEntity::class,
+        DeudaEntity::class          // 👈 nueva entidad
     ],
-    version = 1,
+    version = 2,                    // ⬅ subimos versión
     exportSchema = false
 )
 abstract class FinanceDatabase : RoomDatabase() {
 
     abstract fun transaccionDao(): TransaccionDao
     abstract fun cuentaDao(): CuentaDao
+    abstract fun deudaDao(): DeudaDao        // 👈 nuevo dao
 
     companion object {
         @Volatile
@@ -33,7 +37,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                     FinanceDatabase::class.java,
                     "finance_db"
                 )
-                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigration() // por ahora destruimos en cambios de versión
                     .build()
                     .also { INSTANCE = it }
             }
