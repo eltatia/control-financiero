@@ -49,7 +49,7 @@ private val TextMuted = Color(0xFF9CA3AF)
 @Composable
 fun CuentasScreen(
     isDarkMode: Boolean,
-    viewModel: FinanceViewModel = viewModel()
+    viewModel: FinanceViewModel = viewModel(factory = FinanceViewModel.Factory)
 ) {
     val cuentas by viewModel.cuentas.collectAsState()
     val deudas by viewModel.deudas.collectAsState()

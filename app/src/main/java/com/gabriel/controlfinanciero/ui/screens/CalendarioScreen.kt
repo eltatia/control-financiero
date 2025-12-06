@@ -75,7 +75,7 @@ private val TextMuted = Color(0xFF9CA3AF)
 @Composable
 fun CalendarioScreen(
     isDarkMode: Boolean,
-    viewModel: FinanceViewModel = viewModel()
+    viewModel: FinanceViewModel = viewModel(factory = FinanceViewModel.Factory)
 ) {
 
     val bgColor = if (isDarkMode) CalendarBackground else Color(0xFFF3F6FF)

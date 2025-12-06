@@ -302,7 +302,7 @@ private fun formatFechaCorta(millis: Long): String {
 fun HomeScreen(
     isDarkMode: Boolean,
     onToggleDarkMode: () -> Unit,
-    viewModel: FinanceViewModel = viewModel()
+    viewModel: FinanceViewModel = viewModel(factory = FinanceViewModel.Factory)
 ) {
     // ▶️ Datos reales desde el ViewModel / Room
     val totalIngresos by viewModel.totalIngresosMes.collectAsState()

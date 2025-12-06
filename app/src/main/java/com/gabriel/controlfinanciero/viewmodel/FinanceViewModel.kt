@@ -2,7 +2,10 @@ package com.gabriel.controlfinanciero.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.gabriel.controlfinanciero.data.FinanceRepository
 import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
 import com.gabriel.controlfinanciero.data.local.entities.DeudaEntity
@@ -268,6 +271,15 @@ class FinanceViewModel(
             repository.cargarDatosDemo()
             cargarDatosMes()
             cargarDatosAnuales()
+        }
+    }
+
+    companion object {
+        val Factory = viewModelFactory {
+            initializer {
+                val app = (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as Application)
+                FinanceViewModel(app)
+            }
         }
     }
 }
