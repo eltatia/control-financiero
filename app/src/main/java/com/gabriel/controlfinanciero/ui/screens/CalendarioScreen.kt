@@ -88,12 +88,20 @@ fun CalendarioScreen(
     var selectedMonth by remember { mutableStateOf(YearMonth.now()) }
     var selectedDay by remember { mutableStateOf(LocalDate.now().dayOfMonth) }
 
+    val safeSelectedDay = remember(selectedMonth, selectedDay) {
+        selectedDay.coerceAtMost(selectedMonth.lengthOfMonth()).coerceAtLeast(1)
+    }
+
+    val onMonthChange: (YearMonth) -> Unit = { newMonth ->
+        selectedMonth = newMonth
+        selectedDay = 1
+    }
+
     val transaccionesMes by viewModel.transaccionesMes.collectAsState()
     val deudas by viewModel.deudas.collectAsState()
 
     LaunchedEffect(selectedMonth) {
         viewModel.cargarDatosMes(selectedMonth.atDay(1))
-        selectedDay = selectedMonth.atDay(1).dayOfMonth
     }
 
     val eventsByDay = remember(transaccionesMes, deudas, selectedMonth) {
@@ -137,8 +145,8 @@ fun CalendarioScreen(
         events
     }
 
-    val eventsForSelectedDay = remember(eventsByDay, selectedDay, selectedFilter) {
-        val dayEvents = eventsByDay[selectedDay].orEmpty()
+    val eventsForSelectedDay = remember(eventsByDay, safeSelectedDay, selectedFilter) {
+        val dayEvents = eventsByDay[safeSelectedDay].orEmpty()
         dayEvents.filter { event ->
             when (selectedFilter) {
                 CalendarFilter.TODOS -> true
@@ -210,10 +218,10 @@ fun CalendarioScreen(
             // ================= CALENDARIO MENSUAL =================
             CalendarMonthView(
                 month = selectedMonth,
-                selectedDay = selectedDay,
+                selectedDay = safeSelectedDay,
                 eventsByDay = eventsByDay,
                 selectedFilter = selectedFilter,
-                onMonthChange = { selectedMonth = it },
+                onMonthChange = onMonthChange,
                 onSelectDay = { selectedDay = it },
                 textMutedColor = textMutedColor,
                 textPrimary = textPrimary,
@@ -259,7 +267,7 @@ fun CalendarioScreen(
 
             // ================= EVENTOS DEL DÍA =================
             Text(
-                text = "Eventos del ${selectedMonth.atDay(selectedDay).format(DateTimeFormatter.ofPattern("d 'de' MMMM", Locale("es", "ES")))}",
+                text = "Eventos del ${selectedMonth.atDay(safeSelectedDay).format(DateTimeFormatter.ofPattern("d 'de' MMMM", Locale("es", "ES")))}",
                 color = textPrimary,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 18.sp
