@@ -58,6 +58,10 @@ fun CuentasScreen(
     val totalIngresosAnual by viewModel.totalIngresosAnual.collectAsState()
     val totalEgresosAnual by viewModel.totalEgresosAnual.collectAsState()
 
+    // Saldos actuales de cuentas y neto con deudas
+    val saldoCuentas by viewModel.saldoActualCuentas.collectAsState()
+    val saldoNetoTrasDeudas by viewModel.saldoNetoTrasDeudas.collectAsState()
+
     // Todas las transacciones (para calcular saldo actual por cuenta)
     val todasTransacciones by viewModel.todasTransacciones.collectAsState()
 
@@ -184,6 +188,30 @@ fun CuentasScreen(
                     titulo = "Egresos del año",
                     monto = totalEgresosAnual,
                     colorMonto = AccentRed,
+                    modifier = Modifier.weight(1f),
+                    cardColor = cardColor,
+                    textMutedColor = textMutedColor
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                PatrimonioCard(
+                    titulo = "Saldo de cuentas",
+                    monto = saldoCuentas,
+                    colorMonto = if (saldoCuentas >= 0) AccentGreen else AccentRed,
+                    modifier = Modifier.weight(1f),
+                    cardColor = cardColor,
+                    textMutedColor = textMutedColor
+                )
+                PatrimonioCard(
+                    titulo = "Saldo neto (menos deudas)",
+                    monto = saldoNetoTrasDeudas,
+                    colorMonto = if (saldoNetoTrasDeudas >= 0) AccentGreen else AccentRed,
                     modifier = Modifier.weight(1f),
                     cardColor = cardColor,
                     textMutedColor = textMutedColor
@@ -799,7 +827,7 @@ private fun AccountItemCard(
 
             Text(
                 text = "S/ ${"%,.2f".format(monto)}",
-                color = textPrimary,
+                color = if (monto >= 0) textPrimary else AccentRed,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp
             )

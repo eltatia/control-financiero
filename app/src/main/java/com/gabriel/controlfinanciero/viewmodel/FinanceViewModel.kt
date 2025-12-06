@@ -60,6 +60,27 @@ class FinanceViewModel(
                 _deudas.value = lista
             }
         }
+
+        // Saldo total de cuentas y saldo neto descontando deudas activas
+        viewModelScope.launch {
+            combine(cuentas, todasTransacciones, deudas) { cuentasLista, transacciones, deudasLista ->
+                val saldoCuentas = cuentasLista.sumOf { cuenta ->
+                    val movimiento = transacciones
+                        .filter { it.cuentaId == cuenta.id }
+                        .sumOf { trans -> if (trans.tipo == "INGRESO") trans.monto else -trans.monto }
+                    cuenta.saldoInicial + movimiento
+                }
+
+                val deudasPendientes = deudasLista
+                    .filter { it.estado == "ACTIVA" }
+                    .sumOf { it.montoPendiente }
+
+                Pair(saldoCuentas, saldoCuentas - deudasPendientes)
+            }.collect { (saldoCuentas, saldoNeto) ->
+                _saldoActualCuentas.value = saldoCuentas
+                _saldoNetoTrasDeudas.value = saldoNeto
+            }
+        }
     }
 
     // ------------------- OPERACIONES CUENTAS -------------------
@@ -173,6 +194,14 @@ class FinanceViewModel(
 
     private val _balanceAnual = MutableStateFlow(0.0)
     val balanceAnual: StateFlow<Double> = _balanceAnual.asStateFlow()
+
+    // ------------------- SALDOS DE CUENTAS -------------------
+
+    private val _saldoActualCuentas = MutableStateFlow(0.0)
+    val saldoActualCuentas: StateFlow<Double> = _saldoActualCuentas.asStateFlow()
+
+    private val _saldoNetoTrasDeudas = MutableStateFlow(0.0)
+    val saldoNetoTrasDeudas: StateFlow<Double> = _saldoNetoTrasDeudas.asStateFlow()
 
     /**
      * Carga las transacciones del año dado (por defecto el año actual)
