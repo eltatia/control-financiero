@@ -8,16 +8,19 @@ import kotlinx.coroutines.flow.Flow
 interface TransaccionDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertar(transaccion: TransaccionEntity)
+    suspend fun insertar(transaccion: TransaccionEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertarLista(transacciones: List<TransaccionEntity>)
+    suspend fun insertarLista(transacciones: List<TransaccionEntity>): List<Long>
 
     @Update
     suspend fun actualizar(transaccion: TransaccionEntity)
 
     @Delete
     suspend fun eliminar(transaccion: TransaccionEntity)
+
+    @Query("DELETE FROM transacciones")
+    suspend fun eliminarTodas()
 
     // 🔹 Todas las transacciones (la usaremos para saldo actual por cuenta)
     @Query("SELECT * FROM transacciones ORDER BY fecha DESC")

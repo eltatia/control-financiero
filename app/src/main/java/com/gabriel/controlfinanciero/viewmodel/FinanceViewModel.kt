@@ -10,6 +10,7 @@ import com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
@@ -186,13 +187,21 @@ class FinanceViewModel(
         val hasta = lastDay.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
 
         viewModelScope.launch {
-            repository.obtenerTransaccionesRango(desde, hasta).collect { lista ->
+            combine(
+                repository.obtenerTransaccionesRango(desde, hasta),
+                cuentas
+            ) { lista, cuentasLista ->
                 val ingresos = lista.filter { it.tipo == "INGRESO" }.sumOf { it.monto }
+                val ingresosIniciales = cuentasLista
+                    .filter { it.saldoInicial > 0 }
+                    .sumOf { it.saldoInicial }
                 val egresos = lista.filter { it.tipo == "EGRESO" }.sumOf { it.monto }
 
-                _totalIngresosAnual.value = ingresos
+                Pair(ingresos + ingresosIniciales, egresos)
+            }.collect { (ingresosTotales, egresos) ->
+                _totalIngresosAnual.value = ingresosTotales
                 _totalEgresosAnual.value = egresos
-                _balanceAnual.value = ingresos - egresos
+                _balanceAnual.value = ingresosTotales - egresos
             }
         }
     }
@@ -222,6 +231,14 @@ class FinanceViewModel(
                 nota = nota
             )
             repository.registrarTransaccion(transaccion)
+        }
+    }
+
+    fun cargarDatosDemo() {
+        viewModelScope.launch {
+            repository.cargarDatosDemo()
+            cargarDatosMes()
+            cargarDatosAnuales()
         }
     }
 }

@@ -8,7 +8,10 @@ import kotlinx.coroutines.flow.Flow
 interface DeudaDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertar(deuda: DeudaEntity)
+    suspend fun insertar(deuda: DeudaEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertarLista(deudas: List<DeudaEntity>): List<Long>
 
     @Update
     suspend fun actualizar(deuda: DeudaEntity)
@@ -21,4 +24,7 @@ interface DeudaDao {
 
     @Query("SELECT * FROM deudas WHERE estado = :estado ORDER BY fechaRegistro DESC")
     fun obtenerPorEstado(estado: String): Flow<List<DeudaEntity>>
+
+    @Query("DELETE FROM deudas")
+    suspend fun eliminarTodas()
 }

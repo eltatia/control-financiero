@@ -98,6 +98,11 @@ fun CuentasScreen(
 
     // ================= ESTADO MENÚ DEL FAB =================
     var fabMenuExpanded by remember { mutableStateOf(false) }
+    var showSettingsMenu by remember { mutableStateOf(false) }
+
+    // Confirmaciones de borrado
+    var cuentaParaEliminar by remember { mutableStateOf<CuentaEntity?>(null) }
+    var deudaParaEliminar by remember { mutableStateOf<DeudaEntity?>(null) }
 
     Box(
         modifier = Modifier
@@ -127,12 +132,27 @@ fun CuentasScreen(
                     modifier = Modifier.weight(1f),
                 )
 
-                IconButton(onClick = { /* ajustes */ }) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Configuración",
-                        tint = textPrimary
-                    )
+                Box {
+                    IconButton(onClick = { showSettingsMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Configuración",
+                            tint = textPrimary
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showSettingsMenu,
+                        onDismissRequest = { showSettingsMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Cargar datos demo") },
+                            onClick = {
+                                showSettingsMenu = false
+                                viewModel.cargarDatosDemo()
+                            }
+                        )
+                    }
                 }
             }
 
@@ -221,7 +241,7 @@ fun CuentasScreen(
                             showNuevaCuentaDialog = true
                         },
                         onDelete = {
-                            viewModel.eliminarCuenta(cuenta)
+                            cuentaParaEliminar = cuenta
                         }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -259,7 +279,7 @@ fun CuentasScreen(
                             showAbonoDeudaDialog = true
                         },
                         onEliminar = {
-                            viewModel.eliminarDeuda(deuda)
+                            deudaParaEliminar = deuda
                         }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -326,6 +346,60 @@ fun CuentasScreen(
                 }
             }
         }
+    }
+
+    // ================= CONFIRMAR ELIMINACIÓN DE CUENTA =================
+    if (cuentaParaEliminar != null) {
+        AlertDialog(
+            onDismissRequest = { cuentaParaEliminar = null },
+            title = { Text("Eliminar cuenta") },
+            text = {
+                Text(
+                    "Esta acción borrará la cuenta y sus movimientos asociados. ¿Deseas continuar?"
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        cuentaParaEliminar?.let { viewModel.eliminarCuenta(it) }
+                        cuentaParaEliminar = null
+                    }
+                ) {
+                    Text("Eliminar", color = AccentRed)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { cuentaParaEliminar = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // ================= CONFIRMAR ELIMINACIÓN DE DEUDA =================
+    if (deudaParaEliminar != null) {
+        AlertDialog(
+            onDismissRequest = { deudaParaEliminar = null },
+            title = { Text("Eliminar deuda / préstamo") },
+            text = {
+                Text("¿Seguro que deseas eliminar este registro? Esta acción no se puede deshacer.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deudaParaEliminar?.let { viewModel.eliminarDeuda(it) }
+                        deudaParaEliminar = null
+                    }
+                ) {
+                    Text("Eliminar", color = AccentRed)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deudaParaEliminar = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 
     // ================= DIÁLOGO NUEVA / EDITAR CUENTA =================
