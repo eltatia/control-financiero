@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.align
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -144,7 +143,9 @@ fun CalendarioScreen(
             }
         }
 
-        events.mapValues { (_, list) -> list.toList() }
+        events
+            .mapValues { (_, list) -> list.toList() }
+            .toSortedMap()
     }
 
     val eventsForSelectedDay = remember(eventsByDay, safeSelectedDay, selectedFilter) {
@@ -659,13 +660,17 @@ private fun DayCell(
 
                 if (dotColor != null) {
                     Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .offset(y = 2.dp)
-                            .size(5.dp)
-                            .clip(CircleShape)
-                            .background(dotColor)
-                    )
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .offset(y = 2.dp)
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(dotColor)
+                        )
+                    }
                 }
             }
         }
