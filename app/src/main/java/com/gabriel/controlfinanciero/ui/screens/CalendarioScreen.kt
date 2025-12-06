@@ -104,7 +104,7 @@ fun CalendarioScreen(
         viewModel.cargarDatosMes(selectedMonth.atDay(1))
     }
 
-    val eventsByDay = remember(transaccionesMes, deudas, selectedMonth) {
+    val eventsByDay: Map<Int, List<CalendarEvent>> = remember(transaccionesMes, deudas, selectedMonth) {
         val zoneId = ZoneId.systemDefault()
         val formatter = DateTimeFormatter.ofPattern("d 'de' MMM", Locale("es", "ES"))
         val events = mutableMapOf<Int, MutableList<CalendarEvent>>()
@@ -142,7 +142,7 @@ fun CalendarioScreen(
             }
         }
 
-        events
+        events.mapValues { (_, list) -> list.toList() }
     }
 
     val eventsForSelectedDay = remember(eventsByDay, safeSelectedDay, selectedFilter) {
