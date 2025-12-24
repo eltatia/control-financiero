@@ -25,8 +25,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,6 +41,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
+import java.time.Instant
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 // Colores base estilo dark-reportes
 private val ReportsBackground = Color(0xFF021712)
@@ -53,7 +61,10 @@ private val TextMuted = Color(0xFF9CA3AF)
 //                      PANTALLA REPORTES
 // =============================================================
 @Composable
-fun ReportesScreen(isDarkMode: Boolean) {
+fun ReportesScreen(
+    isDarkMode: Boolean,
+    viewModel: FinanceViewModel = viewModel(factory = FinanceViewModel.Factory)
+) {
 
     val bgColor = if (isDarkMode) ReportsBackground else Color(0xFFF3F6FF)
     val cardColor = if (isDarkMode) CardDark else Color.White
@@ -61,8 +72,102 @@ fun ReportesScreen(isDarkMode: Boolean) {
     val textMutedColor = if (isDarkMode) TextMuted else Color.Gray
     val textPrimary = if (isDarkMode) Color.White else Color.Black
 
+    val transacciones by viewModel.todasTransacciones.collectAsState()
+
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Mes actual", "Mes anterior", "Año actual", "Personalizado")
+
+    val zoneId = ZoneId.systemDefault()
+    val today = LocalDate.now()
+    val selectedRange by remember(selectedTab, today) {
+        derivedStateOf {
+            when (selectedTab) {
+                0 -> rangeForMonth(YearMonth.from(today))
+                1 -> rangeForMonth(YearMonth.from(today).minusMonths(1))
+                2 -> rangeForYear(today.year)
+                else -> rangeForMonth(YearMonth.from(today))
+            }
+        }
+    }
+    val previousRange by remember(selectedTab, today) {
+        derivedStateOf {
+            when (selectedTab) {
+                0 -> rangeForMonth(YearMonth.from(today).minusMonths(1))
+                1 -> rangeForMonth(YearMonth.from(today).minusMonths(2))
+                2 -> rangeForYear(today.year - 1)
+                else -> rangeForMonth(YearMonth.from(today).minusMonths(1))
+            }
+        }
+    }
+
+    val transaccionesRango = remember(transacciones, selectedRange) {
+        transacciones.filter { transaccion ->
+            val fecha = Instant.ofEpochMilli(transaccion.fecha).atZone(zoneId).toLocalDate()
+            !fecha.isBefore(selectedRange.first) && !fecha.isAfter(selectedRange.second)
+        }
+    }
+    val transaccionesPrevias = remember(transacciones, previousRange) {
+        transacciones.filter { transaccion ->
+            val fecha = Instant.ofEpochMilli(transaccion.fecha).atZone(zoneId).toLocalDate()
+            !fecha.isBefore(previousRange.first) && !fecha.isAfter(previousRange.second)
+        }
+    }
+
+    val ingresos = transaccionesRango.filter { it.tipo == "INGRESO" }.sumOf { it.monto }
+    val egresos = transaccionesRango.filter { it.tipo == "EGRESO" }.sumOf { it.monto }
+    val saldoNeto = ingresos - egresos
+
+    val ingresosPrev = transaccionesPrevias.filter { it.tipo == "INGRESO" }.sumOf { it.monto }
+    val egresosPrev = transaccionesPrevias.filter { it.tipo == "EGRESO" }.sumOf { it.monto }
+    val saldoPrev = ingresosPrev - egresosPrev
+
+    val variacionIngresos = porcentajeVariacion(ingresos, ingresosPrev)
+    val variacionEgresos = porcentajeVariacion(egresos, egresosPrev)
+    val variacionSaldo = porcentajeVariacion(saldoNeto, saldoPrev)
+
+    val egresosPorCategoria = transaccionesRango
+        .filter { it.tipo == "EGRESO" }
+        .groupBy { it.categoria.ifBlank { "Otros" } }
+        .mapValues { (_, items) -> items.sumOf { it.monto } }
+        .toList()
+        .sortedByDescending { it.second }
+
+    val topCategorias = egresosPorCategoria.take(3)
+    val totalEgresos = egresos.takeIf { it > 0.0 } ?: 1.0
+
+    val chartPoints = remember(transaccionesRango, selectedRange) {
+        buildSaldoSeries(transaccionesRango, selectedRange.first, selectedRange.second)
+    }
+    val chartLabels = remember(selectedRange) {
+        buildChartLabels(selectedRange.first, selectedRange.second)
+    }
+
+    val mesesSerie = remember(transacciones) {
+        val meses = (0..3).map { YearMonth.from(today).minusMonths((3 - it).toLong()) }
+        val ingresosSerie = meses.map { month ->
+            transacciones
+                .filter { it.tipo == "INGRESO" }
+                .filter { Instant.ofEpochMilli(it.fecha).atZone(zoneId).toLocalDate().let { date ->
+                    YearMonth.from(date) == month
+                } }
+                .sumOf { it.monto }
+                .toFloat()
+        }
+        val egresosSerie = meses.map { month ->
+            transacciones
+                .filter { it.tipo == "EGRESO" }
+                .filter { Instant.ofEpochMilli(it.fecha).atZone(zoneId).toLocalDate().let { date ->
+                    YearMonth.from(date) == month
+                } }
+                .sumOf { it.monto }
+                .toFloat()
+        }
+        Triple(
+            meses.map { it.format(DateTimeFormatter.ofPattern("MMM")) },
+            ingresosSerie,
+            egresosSerie
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -136,8 +241,8 @@ fun ReportesScreen(isDarkMode: Boolean) {
             ) {
                 ResumenMiniCard(
                     titulo = "Ingresos Totales",
-                    monto = 2500.00,
-                    variacion = +5.2,
+                    monto = ingresos,
+                    variacion = variacionIngresos,
                     positiveColor = AccentGreen,
                     icon = Icons.Default.ArrowUpward,
                     modifier = Modifier.weight(1f),
@@ -147,8 +252,8 @@ fun ReportesScreen(isDarkMode: Boolean) {
                 )
                 ResumenMiniCard(
                     titulo = "Egresos Totales",
-                    monto = 1850.50,
-                    variacion = +8.1,
+                    monto = egresos,
+                    variacion = variacionEgresos,
                     positiveColor = AccentGreen,
                     icon = Icons.Default.ArrowDownward,
                     modifier = Modifier.weight(1f),
@@ -177,15 +282,15 @@ fun ReportesScreen(isDarkMode: Boolean) {
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "S/ 649.50",
+                        text = "S/ ${"%,.2f".format(saldoNeto)}",
                         color = textPrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 26.sp
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "-2.5%",
-                        color = AccentRed,
+                        text = formatVariacion(variacionSaldo),
+                        color = if (variacionSaldo >= 0) AccentGreen else AccentRed,
                         fontSize = 13.sp
                     )
                 }
@@ -210,15 +315,15 @@ fun ReportesScreen(isDarkMode: Boolean) {
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "S/ 649.50",
+                        text = "S/ ${"%,.2f".format(saldoNeto)}",
                         color = textPrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 22.sp
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "1 Oct – 31 Oct   +S/ 50.10",
-                        color = AccentGreen,
+                        text = "${formatRangeLabel(selectedRange.first, selectedRange.second)}   ${formatSaldoDelta(saldoNeto - saldoPrev)}",
+                        color = if (saldoNeto - saldoPrev >= 0) AccentGreen else AccentRed,
                         fontSize = 12.sp
                     )
 
@@ -232,7 +337,7 @@ fun ReportesScreen(isDarkMode: Boolean) {
                             .padding(horizontal = 8.dp, vertical = 8.dp)
                     ) {
                         LineChartSaldo(
-                            points = listOf(30f, 70f, 55f, 90f, 40f, 35f, 80f),
+                            points = chartPoints,
                             lineColor = AccentGreen
                         )
 
@@ -242,11 +347,9 @@ fun ReportesScreen(isDarkMode: Boolean) {
                                 .fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("1", color = textMutedColor, fontSize = 10.sp)
-                            Text("7", color = textMutedColor, fontSize = 10.sp)
-                            Text("14", color = textMutedColor, fontSize = 10.sp)
-                            Text("21", color = textMutedColor, fontSize = 10.sp)
-                            Text("31", color = textMutedColor, fontSize = 10.sp)
+                            chartLabels.forEach { label ->
+                                Text(label, color = textMutedColor, fontSize = 10.sp)
+                            }
                         }
                     }
                 }
@@ -279,9 +382,9 @@ fun ReportesScreen(isDarkMode: Boolean) {
                     Spacer(modifier = Modifier.height(12.dp))
 
                     BarChartIngresosEgresos(
-                        meses = listOf("Jul", "Ago", "Sep", "Oct"),
-                        ingresos = listOf(1800f, 2200f, 2000f, 2500f),
-                        egresos = listOf(1400f, 1600f, 1500f, 1850f),
+                        meses = mesesSerie.first,
+                        ingresos = mesesSerie.second,
+                        egresos = mesesSerie.third,
                         barBg = softCardColor
                     )
                 }
@@ -299,36 +402,31 @@ fun ReportesScreen(isDarkMode: Boolean) {
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            CategoriaRow(
-                icon = Icons.Default.DirectionsCar,
-                nombre = "Transporte",
-                porcentaje = 24.3,
-                monto = 450.0,
-                variacion = +2.1,
-                cardColor = cardColor,
-                textMutedColor = textMutedColor,
-                textPrimary = textPrimary
-            )
-            CategoriaRow(
-                icon = Icons.Default.Restaurant,
-                nombre = "Comida",
-                porcentaje = 20.5,
-                monto = 380.75,
-                variacion = -1.5,
-                cardColor = cardColor,
-                textMutedColor = textMutedColor,
-                textPrimary = textPrimary
-            )
-            CategoriaRow(
-                icon = Icons.Default.CreditCard,
-                nombre = "Deudas",
-                porcentaje = 16.2,
-                monto = 300.0,
-                variacion = 0.0,
-                cardColor = cardColor,
-                textMutedColor = textMutedColor,
-                textPrimary = textPrimary
-            )
+            if (topCategorias.isEmpty()) {
+                Text(
+                    text = "Sin egresos registrados en este periodo.",
+                    color = textMutedColor,
+                    fontSize = 13.sp
+                )
+            } else {
+                topCategorias.forEachIndexed { index, (nombre, monto) ->
+                    val porcentaje = monto / totalEgresos * 100
+                    CategoriaRow(
+                        icon = when (index) {
+                            0 -> Icons.Default.DirectionsCar
+                            1 -> Icons.Default.Restaurant
+                            else -> Icons.Default.CreditCard
+                        },
+                        nombre = nombre,
+                        porcentaje = porcentaje,
+                        monto = monto,
+                        variacion = 0.0,
+                        cardColor = cardColor,
+                        textMutedColor = textMutedColor,
+                        textPrimary = textPrimary
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(18.dp))
 
@@ -355,24 +453,18 @@ fun ReportesScreen(isDarkMode: Boolean) {
                         fontSize = 15.sp
                     )
                     Spacer(modifier = Modifier.height(6.dp))
+                    val comparacionTexto = if (variacionEgresos >= 0) "gastaste más" else "gastaste menos"
                     Text(
-                        text = "Gastaste un ",
+                        text = "Comparado al periodo anterior, $comparacionTexto:",
                         color = textMutedColor,
                         fontSize = 13.sp
                     )
-                    Row {
-                        Text(
-                            text = "15% más ",
-                            color = AccentRed,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "en la categoría de Comida.",
-                            color = textMutedColor,
-                            fontSize = 13.sp
-                        )
-                    }
+                    Text(
+                        text = formatVariacion(kotlin.math.abs(variacionEgresos)),
+                        color = if (variacionEgresos >= 0) AccentRed else AccentGreen,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
 
@@ -392,21 +484,12 @@ fun ReportesScreen(isDarkMode: Boolean) {
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Row {
+                        val promedioTexto = if (variacionIngresos >= 0) "por encima" else "por debajo"
                         Text(
-                            text = "Tus ingresos están un ",
-                            color = textMutedColor,
-                            fontSize = 13.sp
-                        )
-                        Text(
-                            text = "8% por encima ",
-                            color = AccentGreen,
+                            text = "Tus ingresos están ${formatVariacion(kotlin.math.abs(variacionIngresos))} $promedioTexto del periodo anterior.",
+                            color = if (variacionIngresos >= 0) AccentGreen else AccentRed,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "del promedio.",
-                            color = textMutedColor,
-                            fontSize = 13.sp
                         )
                     }
                 }
@@ -708,4 +791,75 @@ private fun FiltroChip(
             fontWeight = FontWeight.SemiBold
         )
     }
+}
+
+private fun rangeForMonth(month: YearMonth): Pair<LocalDate, LocalDate> {
+    return month.atDay(1) to month.atEndOfMonth()
+}
+
+private fun rangeForYear(year: Int): Pair<LocalDate, LocalDate> {
+    return LocalDate.of(year, 1, 1) to LocalDate.of(year, 12, 31)
+}
+
+private fun porcentajeVariacion(actual: Double, anterior: Double): Double {
+    if (anterior == 0.0) return if (actual == 0.0) 0.0 else 100.0
+    return ((actual - anterior) / anterior) * 100
+}
+
+private fun formatVariacion(valor: Double): String {
+    val signo = if (valor >= 0) "+" else ""
+    return "$signo${"%.1f".format(valor)}%"
+}
+
+private fun formatSaldoDelta(delta: Double): String {
+    val signo = if (delta >= 0) "+" else "-"
+    return "$signo S/ ${"%,.2f".format(kotlin.math.abs(delta))}"
+}
+
+private fun formatRangeLabel(desde: LocalDate, hasta: LocalDate): String {
+    val formatter = DateTimeFormatter.ofPattern("d MMM")
+    return "${desde.format(formatter)} – ${hasta.format(formatter)}"
+}
+
+private fun buildSaldoSeries(
+    transacciones: List<com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity>,
+    desde: LocalDate,
+    hasta: LocalDate
+): List<Float> {
+    val zoneId = ZoneId.systemDefault()
+    val days = generateSequence(desde) { date ->
+        date.plusDays(1).takeIf { it <= hasta }
+    }.toList()
+
+    if (days.isEmpty()) return listOf(0f)
+
+    val transaccionesPorDia = transacciones.groupBy { transaccion ->
+        Instant.ofEpochMilli(transaccion.fecha).atZone(zoneId).toLocalDate()
+    }
+
+    return days.map { dia ->
+        val movimientos = transaccionesPorDia[dia].orEmpty()
+        val ingresos = movimientos.filter { it.tipo == "INGRESO" }.sumOf { it.monto }
+        val egresos = movimientos.filter { it.tipo == "EGRESO" }.sumOf { it.monto }
+        (ingresos - egresos).toFloat()
+    }
+}
+
+private fun buildChartLabels(desde: LocalDate, hasta: LocalDate): List<String> {
+    val totalDays = java.time.temporal.ChronoUnit.DAYS.between(desde, hasta).toInt().coerceAtLeast(1)
+    val step = (totalDays / 4).coerceAtLeast(1)
+    val labels = mutableListOf<String>()
+    val formatter = DateTimeFormatter.ofPattern("d")
+
+    var current = desde
+    while (current <= hasta && labels.size < 5) {
+        labels.add(current.format(formatter))
+        current = current.plusDays(step.toLong())
+    }
+
+    if (labels.isEmpty() || labels.last() != hasta.format(formatter)) {
+        labels.add(hasta.format(formatter))
+    }
+
+    return labels.take(5)
 }
