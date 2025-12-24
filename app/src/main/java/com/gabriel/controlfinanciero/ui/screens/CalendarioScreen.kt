@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -426,48 +427,51 @@ fun CalendarioScreen(
             }
         }
 
-        FloatingActionButton(
-            onClick = { showFabMenu = true },
-            containerColor = AccentGreen,
-            contentColor = Color.Black,
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Agregar"
-            )
-        }
+            FloatingActionButton(
+                onClick = { showFabMenu = true },
+                containerColor = AccentGreen,
+                contentColor = Color.Black
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Agregar"
+                )
+            }
 
-        DropdownMenu(
-            expanded = showFabMenu,
-            onDismissRequest = { showFabMenu = false },
-            modifier = Modifier.align(Alignment.BottomEnd),
-            offset = DpOffset(0.dp, (-56).dp)
-        ) {
-            DropdownMenuItem(
-                text = { Text("Nuevo evento") },
-                onClick = {
-                    showFabMenu = false
-                    editingRecordatorio = null
-                    recordatorioTitulo = ""
-                    recordatorioMonto = ""
-                    recordatorioNota = ""
-                    recordatorioTipo = "PAGO"
-                    showRecordatorioSheet = true
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("Nueva meta") },
-                onClick = {
-                    showFabMenu = false
-                    editingMeta = null
-                    metaTitulo = ""
-                    metaObjetivo = ""
-                    showMetaSheet = true
-                }
-            )
+            DropdownMenu(
+                expanded = showFabMenu,
+                onDismissRequest = { showFabMenu = false },
+                modifier = Modifier.align(Alignment.TopEnd),
+                offset = DpOffset(0.dp, (-8).dp)
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Nuevo evento") },
+                    onClick = {
+                        showFabMenu = false
+                        editingRecordatorio = null
+                        recordatorioTitulo = ""
+                        recordatorioMonto = ""
+                        recordatorioNota = ""
+                        recordatorioTipo = "PAGO"
+                        showRecordatorioSheet = true
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Nueva meta") },
+                    onClick = {
+                        showFabMenu = false
+                        editingMeta = null
+                        metaTitulo = ""
+                        metaObjetivo = ""
+                        showMetaSheet = true
+                    }
+                )
+            }
         }
     }
 
@@ -724,7 +728,8 @@ private fun ModeChip(
     modifier: Modifier = Modifier,
     textPrimary: Color
 ) {
-    val bg = if (selected) Color(0xFF111827) else Color.Transparent
+    val bg = if (selected) AccentGreen else Color.Transparent
+    val textColor = if (selected) Color.Black else textPrimary
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(20.dp))
@@ -734,7 +739,7 @@ private fun ModeChip(
         TextButton(onClick = onClick) {
             Text(
                 text = label,
-                color = textPrimary,
+                color = textColor,
                 fontSize = 14.sp
             )
         }
@@ -1043,12 +1048,15 @@ private fun SwipeActionRow(
     content: @Composable () -> Unit
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { false }
+        confirmValueChange = { value ->
+            value == SwipeToDismissBoxValue.EndToStart || value == SwipeToDismissBoxValue.Settled
+        }
     )
 
     SwipeToDismissBox(
         state = dismissState,
         enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = true,
         backgroundContent = {
             Row(
                 modifier = Modifier
@@ -1059,11 +1067,21 @@ private fun SwipeActionRow(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextButton(onClick = onEdit) {
+                TextButton(
+                    onClick = {
+                        onEdit()
+                        dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+                    }
+                ) {
                     Text(text = "Editar", color = AccentGreen)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                TextButton(onClick = onDelete) {
+                TextButton(
+                    onClick = {
+                        onDelete()
+                        dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+                    }
+                ) {
                     Text(text = "Eliminar", color = AccentRed)
                 }
             }
