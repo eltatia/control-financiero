@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -442,7 +443,8 @@ fun CalendarioScreen(
         DropdownMenu(
             expanded = showFabMenu,
             onDismissRequest = { showFabMenu = false },
-            modifier = Modifier.align(Alignment.BottomEnd)
+            modifier = Modifier.align(Alignment.BottomEnd),
+            offset = DpOffset(0.dp, (-56).dp)
         ) {
             DropdownMenuItem(
                 text = { Text("Nuevo evento") },
