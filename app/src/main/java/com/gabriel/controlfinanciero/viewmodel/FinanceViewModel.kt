@@ -44,11 +44,13 @@ sealed class CalendarEvent {
     ) : CalendarEvent()
 
     data class Rem(
+        val id: Int,
         override val date: LocalDate,
         override val title: String,
         override val subtitle: String,
         override val amount: Double?,
-        val tipo: String
+        val tipo: String,
+        val nota: String?
     ) : CalendarEvent()
 
     data class VenceDeuda(
@@ -340,6 +342,51 @@ class FinanceViewModel(
         }
     }
 
+    fun actualizarRecordatorio(
+        id: Int,
+        titulo: String,
+        tipo: String,
+        monto: Double?,
+        nota: String?,
+        fechaSeleccionada: LocalDate,
+        repeticion: String = "NONE",
+        activo: Boolean = true
+    ) {
+        if (titulo.isBlank()) return
+        val zoneId = ZoneId.systemDefault()
+        val fechaMillis = fechaSeleccionada.atStartOfDay(zoneId).toInstant().toEpochMilli()
+
+        viewModelScope.launch {
+            val recordatorio = RecordatorioEntity(
+                id = id,
+                titulo = titulo,
+                fechaMillis = fechaMillis,
+                tipo = tipo,
+                monto = monto,
+                nota = nota,
+                repeticion = repeticion,
+                activo = activo
+            )
+            repository.actualizarRecordatorio(recordatorio)
+        }
+    }
+
+    fun eliminarRecordatorio(id: Int) {
+        viewModelScope.launch {
+            val recordatorio = RecordatorioEntity(
+                id = id,
+                titulo = "",
+                fechaMillis = 0L,
+                tipo = "NOTA",
+                monto = null,
+                nota = null,
+                repeticion = "NONE",
+                activo = false
+            )
+            repository.eliminarRecordatorio(recordatorio)
+        }
+    }
+
     private fun buildDayMarkers(data: CalendarRangeData): Map<LocalDate, DayMarker> {
         val markers = mutableMapOf<LocalDate, DayMarker>()
         val zoneId = ZoneId.systemDefault()
@@ -419,11 +466,13 @@ class FinanceViewModel(
                 val subtitle = recordatorio.nota ?: recordatorio.tipo
                 eventos.add(
                     CalendarEvent.Rem(
+                        id = recordatorio.id,
                         date = remDate,
                         title = recordatorio.titulo,
                         subtitle = subtitle,
                         amount = recordatorio.monto,
-                        tipo = recordatorio.tipo
+                        tipo = recordatorio.tipo,
+                        nota = recordatorio.nota
                     )
                 )
             }

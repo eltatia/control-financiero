@@ -16,6 +16,8 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -23,9 +25,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -88,17 +92,32 @@ fun CalendarioScreen(
 
     val selectedMonth = remember(selectedDate) { YearMonth.from(selectedDate) }
 
-    var showSheet by remember { mutableStateOf(false) }
+    var showFabMenu by remember { mutableStateOf(false) }
+    var showRecordatorioSheet by remember { mutableStateOf(false) }
+    var showMetaSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    var editingRecordatorio by remember { mutableStateOf<CalendarEvent.Rem?>(null) }
     var recordatorioTitulo by remember { mutableStateOf("") }
     var recordatorioTipo by remember { mutableStateOf("PAGO") }
     var recordatorioMonto by remember { mutableStateOf("") }
     var recordatorioNota by remember { mutableStateOf("") }
+    var recordatorioFecha by remember { mutableStateOf(selectedDate) }
+
+    var metas by remember { mutableStateOf(listOf<MetaItem>()) }
+    var editingMeta by remember { mutableStateOf<MetaItem?>(null) }
+    var metaTitulo by remember { mutableStateOf("") }
+    var metaObjetivo by remember { mutableStateOf("") }
 
     LaunchedEffect(selectedDate, mode) {
         if (mode == "MES") {
             viewModel.setMes(selectedDate)
+        }
+    }
+
+    LaunchedEffect(showRecordatorioSheet, selectedDate, editingRecordatorio) {
+        if (showRecordatorioSheet) {
+            recordatorioFecha = editingRecordatorio?.date ?: selectedDate
         }
     }
 
@@ -277,58 +296,78 @@ fun CalendarioScreen(
             } else {
                 val lastIndex = eventosDelDia.lastIndex
                 eventosDelDia.forEachIndexed { index, event ->
-                    val icon: ImageVector
-                    val circleColor: Color
-                    val iconTint: Color
-                    val amountColor: Color
-                    val amountText: String
+                    val eventCard: @Composable () -> Unit = {
+                        val icon: ImageVector
+                        val circleColor: Color
+                        val iconTint: Color
+                        val amountColor: Color
+                        val amountText: String
 
-                    when (event) {
-                        is CalendarEvent.Tx -> {
-                            if (event.tipo == "INGRESO") {
-                                icon = Icons.Default.ArrowUpward
-                                circleColor = Color(0xFF064E3B)
-                                iconTint = AccentGreen
-                                amountColor = AccentGreen
-                                amountText = "+ ${formatCurrency(event.amount)}"
-                            } else {
-                                icon = Icons.Default.ArrowDownward
-                                circleColor = Color(0xFF450A0A)
-                                iconTint = AccentRed
-                                amountColor = AccentRed
-                                amountText = "- ${formatCurrency(event.amount)}"
+                        when (event) {
+                            is CalendarEvent.Tx -> {
+                                if (event.tipo == "INGRESO") {
+                                    icon = Icons.Default.ArrowUpward
+                                    circleColor = Color(0xFF064E3B)
+                                    iconTint = AccentGreen
+                                    amountColor = AccentGreen
+                                    amountText = "+ ${formatCurrency(event.amount)}"
+                                } else {
+                                    icon = Icons.Default.ArrowDownward
+                                    circleColor = Color(0xFF450A0A)
+                                    iconTint = AccentRed
+                                    amountColor = AccentRed
+                                    amountText = "- ${formatCurrency(event.amount)}"
+                                }
+                            }
+
+                            is CalendarEvent.Rem -> {
+                                icon = Icons.Default.Notifications
+                                circleColor = Color(0xFF78350F)
+                                iconTint = AccentYellow
+                                amountColor = AccentYellow
+                                amountText = formatCurrency(event.amount)
+                            }
+
+                            is CalendarEvent.VenceDeuda -> {
+                                icon = Icons.Default.Notifications
+                                circleColor = Color(0xFF78350F)
+                                iconTint = AccentYellow
+                                amountColor = AccentYellow
+                                amountText = formatCurrency(event.amount)
                             }
                         }
 
-                        is CalendarEvent.Rem -> {
-                            icon = Icons.Default.Notifications
-                            circleColor = Color(0xFF78350F)
-                            iconTint = AccentYellow
-                            amountColor = AccentYellow
-                            amountText = formatCurrency(event.amount)
-                        }
-
-                        is CalendarEvent.VenceDeuda -> {
-                            icon = Icons.Default.Notifications
-                            circleColor = Color(0xFF78350F)
-                            iconTint = AccentYellow
-                            amountColor = AccentYellow
-                            amountText = formatCurrency(event.amount)
-                        }
+                        EventCard(
+                            title = event.title,
+                            subtitle = event.subtitle,
+                            amountText = amountText,
+                            amountColor = amountColor,
+                            circleColor = circleColor,
+                            icon = icon,
+                            iconTint = iconTint,
+                            cardColor = cardColor,
+                            textPrimary = textPrimary,
+                            textMutedColor = textMutedColor
+                        )
                     }
 
-                    EventCard(
-                        title = event.title,
-                        subtitle = event.subtitle,
-                        amountText = amountText,
-                        amountColor = amountColor,
-                        circleColor = circleColor,
-                        icon = icon,
-                        iconTint = iconTint,
-                        cardColor = cardColor,
-                        textPrimary = textPrimary,
-                        textMutedColor = textMutedColor
-                    )
+                    if (event is CalendarEvent.Rem) {
+                        SwipeActionRow(
+                            onEdit = {
+                                editingRecordatorio = event
+                                recordatorioTitulo = event.title
+                                recordatorioTipo = event.tipo
+                                recordatorioMonto = event.amount?.toString().orEmpty()
+                                recordatorioNota = event.nota.orEmpty()
+                                showRecordatorioSheet = true
+                            },
+                            onDelete = { viewModel.eliminarRecordatorio(event.id) },
+                            backgroundColor = cardColor,
+                            content = eventCard
+                        )
+                    } else {
+                        eventCard()
+                    }
 
                     if (index != lastIndex) {
                         Spacer(modifier = Modifier.height(8.dp))
@@ -348,19 +387,46 @@ fun CalendarioScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            GoalCard(
-                title = "Vacaciones de Verano",
-                progress = 500f,
-                goal = 2000f,
-                cardColor = cardColor,
-                softCardColor = softCardColor,
-                textPrimary = textPrimary,
-                textMutedColor = textMutedColor
-            )
+            if (metas.isEmpty()) {
+                Text(
+                    text = "Aún no tienes metas registradas.",
+                    color = textMutedColor,
+                    fontSize = 14.sp
+                )
+            } else {
+                metas.forEachIndexed { index, meta ->
+                    SwipeActionRow(
+                        onEdit = {
+                            editingMeta = meta
+                            metaTitulo = meta.title
+                            metaObjetivo = meta.goal.toString()
+                            showMetaSheet = true
+                        },
+                        onDelete = {
+                            metas = metas.filterNot { it.id == meta.id }
+                        },
+                        backgroundColor = cardColor
+                    ) {
+                        GoalCard(
+                            title = meta.title,
+                            progress = meta.progress,
+                            goal = meta.goal,
+                            cardColor = cardColor,
+                            softCardColor = softCardColor,
+                            textPrimary = textPrimary,
+                            textMutedColor = textMutedColor
+                        )
+                    }
+
+                    if (index != metas.lastIndex) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
         }
 
         FloatingActionButton(
-            onClick = { showSheet = true },
+            onClick = { showFabMenu = true },
             containerColor = AccentGreen,
             contentColor = Color.Black,
             modifier = Modifier
@@ -372,11 +438,43 @@ fun CalendarioScreen(
                 contentDescription = "Agregar"
             )
         }
+
+        DropdownMenu(
+            expanded = showFabMenu,
+            onDismissRequest = { showFabMenu = false },
+            modifier = Modifier.align(Alignment.BottomEnd)
+        ) {
+            DropdownMenuItem(
+                text = { Text("Nuevo evento") },
+                onClick = {
+                    showFabMenu = false
+                    editingRecordatorio = null
+                    recordatorioTitulo = ""
+                    recordatorioMonto = ""
+                    recordatorioNota = ""
+                    recordatorioTipo = "PAGO"
+                    showRecordatorioSheet = true
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Nueva meta") },
+                onClick = {
+                    showFabMenu = false
+                    editingMeta = null
+                    metaTitulo = ""
+                    metaObjetivo = ""
+                    showMetaSheet = true
+                }
+            )
+        }
     }
 
-    if (showSheet) {
+    if (showRecordatorioSheet) {
         ModalBottomSheet(
-            onDismissRequest = { showSheet = false },
+            onDismissRequest = {
+                showRecordatorioSheet = false
+                editingRecordatorio = null
+            },
             sheetState = sheetState,
             containerColor = cardColor
         ) {
@@ -387,25 +485,10 @@ fun CalendarioScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Agregar",
+                    text = if (editingRecordatorio == null) "Nuevo evento" else "Editar evento",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = textPrimary
-                )
-
-                TextButton(
-                    onClick = {
-                        showSheet = false
-                        onNuevaTransaccion()
-                    }
-                ) {
-                    Text(text = "Nueva Transacción", color = AccentGreen)
-                }
-
-                Text(
-                    text = "Nuevo Recordatorio",
-                    color = textPrimary,
-                    fontWeight = FontWeight.SemiBold
                 )
 
                 OutlinedTextField(
@@ -455,27 +538,63 @@ fun CalendarioScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Text(
-                    text = "Fecha: ${selectedDate.format(DateTimeFormatter.ofPattern("d 'de' MMM", Locale("es", "ES")))}",
-                    color = textMutedColor,
-                    fontSize = 12.sp
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = { recordatorioFecha = recordatorioFecha.minusDays(1) }) {
+                        Text(text = "◀ Día anterior", color = AccentGreen)
+                    }
+                    Text(
+                        text = recordatorioFecha.format(DateTimeFormatter.ofPattern("d 'de' MMM", Locale("es", "ES"))),
+                        color = textMutedColor,
+                        fontSize = 12.sp
+                    )
+                    TextButton(onClick = { recordatorioFecha = recordatorioFecha.plusDays(1) }) {
+                        Text(text = "Día siguiente ▶", color = AccentGreen)
+                    }
+                }
+
+                TextButton(
+                    onClick = {
+                        onNuevaTransaccion()
+                        showRecordatorioSheet = false
+                        editingRecordatorio = null
+                    }
+                ) {
+                    Text(text = "Nueva Transacción", color = AccentGreen)
+                }
 
                 TextButton(
                     onClick = {
                         val monto = recordatorioMonto.toDoubleOrNull()
-                        viewModel.crearRecordatorio(
-                            titulo = recordatorioTitulo,
-                            tipo = recordatorioTipo,
-                            monto = monto,
-                            nota = recordatorioNota.takeIf { it.isNotBlank() },
-                            fechaSeleccionada = selectedDate
-                        )
+                        val nota = recordatorioNota.takeIf { it.isNotBlank() }
+                        val editing = editingRecordatorio
+                        if (editing == null) {
+                            viewModel.crearRecordatorio(
+                                titulo = recordatorioTitulo,
+                                tipo = recordatorioTipo,
+                                monto = monto,
+                                nota = nota,
+                                fechaSeleccionada = recordatorioFecha
+                            )
+                        } else {
+                            viewModel.actualizarRecordatorio(
+                                id = editing.id,
+                                titulo = recordatorioTitulo,
+                                tipo = recordatorioTipo,
+                                monto = monto,
+                                nota = nota,
+                                fechaSeleccionada = recordatorioFecha
+                            )
+                        }
                         recordatorioTitulo = ""
                         recordatorioMonto = ""
                         recordatorioNota = ""
                         recordatorioTipo = "PAGO"
-                        showSheet = false
+                        showRecordatorioSheet = false
+                        editingRecordatorio = null
                     },
                     enabled = recordatorioTitulo.isNotBlank()
                 ) {
@@ -483,6 +602,76 @@ fun CalendarioScreen(
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
+
+    if (showMetaSheet) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                showMetaSheet = false
+                editingMeta = null
+            },
+            sheetState = sheetState,
+            containerColor = cardColor
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = if (editingMeta == null) "Nueva meta" else "Editar meta",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary
+                )
+
+                OutlinedTextField(
+                    value = metaTitulo,
+                    onValueChange = { metaTitulo = it },
+                    label = { Text("Título") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = metaObjetivo,
+                    onValueChange = { metaObjetivo = it },
+                    label = { Text("Meta (monto)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                TextButton(
+                    onClick = {
+                        val objetivo = metaObjetivo.toFloatOrNull() ?: 0f
+                        val existing = editingMeta
+                        if (existing == null) {
+                            val newMeta = MetaItem(
+                                id = (metas.maxOfOrNull { it.id } ?: 0) + 1,
+                                title = metaTitulo,
+                                goal = objetivo,
+                                progress = 0f
+                            )
+                            metas = metas + newMeta
+                        } else {
+                            metas = metas.map { meta ->
+                                if (meta.id == existing.id) {
+                                    meta.copy(title = metaTitulo, goal = objetivo)
+                                } else {
+                                    meta
+                                }
+                            }
+                        }
+                        metaTitulo = ""
+                        metaObjetivo = ""
+                        showMetaSheet = false
+                        editingMeta = null
+                    },
+                    enabled = metaTitulo.isNotBlank()
+                ) {
+                    Text(text = "Guardar", color = AccentGreen)
+                }
             }
         }
     }
@@ -843,9 +1032,55 @@ private fun MarkerDot(color: Color) {
     Spacer(modifier = Modifier.width(4.dp))
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeActionRow(
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    backgroundColor: Color,
+    content: @Composable () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { false }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(backgroundColor)
+                    .padding(horizontal = 12.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = onEdit) {
+                    Text(text = "Editar", color = AccentGreen)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                TextButton(onClick = onDelete) {
+                    Text(text = "Eliminar", color = AccentRed)
+                }
+            }
+        }
+    ) {
+        content()
+    }
+}
+
 private fun formatCurrency(amount: Double?): String {
     return amount?.let { "S/ ${"%,.2f".format(it)}" } ?: "--"
 }
+
+private data class MetaItem(
+    val id: Int,
+    val title: String,
+    val goal: Float,
+    val progress: Float
+)
 
 // =============================================================
 //                      EVENTOS Y METAS
