@@ -107,6 +107,27 @@ class FinanceRepository private constructor(
         db.deudaDao().actualizar(actualizada)
     }
 
+    // ------------------- RECORDATORIOS -------------------
+
+    fun obtenerRecordatoriosRango(
+        desde: Long,
+        hasta: Long
+    ): Flow<List<RecordatorioEntity>> =
+        db.recordatorioDao().obtenerRecordatoriosRango(desde, hasta)
+
+    suspend fun crearRecordatorio(recordatorio: RecordatorioEntity) {
+        db.recordatorioDao().insertar(recordatorio)
+    }
+
+    suspend fun actualizarRecordatorio(recordatorio: RecordatorioEntity) {
+        db.recordatorioDao().actualizar(recordatorio)
+    }
+
+    suspend fun eliminarRecordatorio(recordatorio: RecordatorioEntity) {
+        db.recordatorioDao().eliminar(recordatorio)
+    }
+
+
     // ------------------- DATOS DEMO -------------------
 
     suspend fun cargarDatosDemo() {

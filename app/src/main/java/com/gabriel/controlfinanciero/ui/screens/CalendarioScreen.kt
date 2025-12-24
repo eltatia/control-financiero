@@ -2,21 +2,14 @@ package com.gabriel.controlfinanciero.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.width
+import androidx.compose.material3.rememberModalBottomSheetState
+import com.gabriel.controlfinanciero.viewmodel.CalendarEvent
+import com.gabriel.controlfinanciero.viewmodel.DayMarker
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -72,10 +65,12 @@ private val TextMuted = Color(0xFF9CA3AF)
 // =============================================================
 //                      PANTALLA CALENDARIO
 // =============================================================
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarioScreen(
     isDarkMode: Boolean,
-    viewModel: FinanceViewModel = viewModel(factory = FinanceViewModel.Factory)
+    viewModel: FinanceViewModel = viewModel(factory = FinanceViewModel.Factory),
+    onNuevaTransaccion: () -> Unit = {}
 ) {
 
     val bgColor = if (isDarkMode) CalendarBackground else Color(0xFFF3F6FF)
