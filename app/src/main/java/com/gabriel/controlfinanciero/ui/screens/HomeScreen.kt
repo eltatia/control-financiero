@@ -5,6 +5,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -293,6 +294,8 @@ private fun formatFechaCorta(millis: Long): String {
 //                      HOME SCREEN COMPLETO
 // =============================================================
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 fun HomeScreen(
     isDarkMode: Boolean,
     onToggleDarkMode: () -> Unit,
@@ -305,6 +308,8 @@ fun HomeScreen(
     val transaccionesMes by viewModel.transaccionesMes.collectAsState()
     val cuentas by viewModel.cuentas.collectAsState()
     val recordatoriosProximos by viewModel.recordatoriosProximos.collectAsState()
+    val nombreUsuario by viewModel.nombreUsuario.collectAsState()
+    val cuentaActual by viewModel.cuentaActual.collectAsState()
 
     // Cargar datos del mes actual al entrar a Home
     LaunchedEffect(Unit) {
@@ -318,6 +323,9 @@ fun HomeScreen(
     var montoMovTexto by remember { mutableStateOf("") }
     var categoriaMov by remember { mutableStateOf("") }
     var cuentaIndex by remember { mutableStateOf(0) }
+    var showSettingsSheet by remember { mutableStateOf(false) }
+    var nombreUsuarioInput by remember { mutableStateOf("") }
+    var cuentaSeleccionadaId by remember { mutableStateOf(0) }
 
     val bgColor = if (isDarkMode) HomeDarkBackground else Color(0xFFF3F6FF)
     val cardColor = if (isDarkMode) HomeDarkCard else Color.White
@@ -414,11 +422,18 @@ fun HomeScreen(
                         fontSize = 14.sp
                     )
                     Text(
-                        "Alex",
+                        nombreUsuario,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = textPrimary
                     )
+                    cuentaActual?.let { cuenta ->
+                        Text(
+                            text = cuenta.nombre,
+                            color = textSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
@@ -428,7 +443,11 @@ fun HomeScreen(
                     Text(if (isDarkMode) "☀️" else "🌙", fontSize = 20.sp)
                 }
 
-                IconButton(onClick = {}) {
+                IconButton(onClick = {
+                    nombreUsuarioInput = nombreUsuario
+                    cuentaSeleccionadaId = cuentaActual?.id ?: 0
+                    showSettingsSheet = true
+                }) {
                     Icon(
                         Icons.Default.Settings,
                         contentDescription = "Config",
@@ -757,6 +776,73 @@ fun HomeScreen(
                 }
             }
         )
+    }
+
+    if (showSettingsSheet) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showSettingsSheet = false },
+            sheetState = sheetState,
+            containerColor = cardColor
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Ajustes",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary
+                )
+
+                OutlinedTextField(
+                    value = nombreUsuarioInput,
+                    onValueChange = { nombreUsuarioInput = it },
+                    label = { Text("Nombre de usuario") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Text(
+                    text = "Cuenta actual",
+                    color = textSecondary,
+                    fontSize = 13.sp
+                )
+
+                cuentas.forEach { cuenta ->
+                    val selected = cuenta.id == cuentaSeleccionadaId
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (selected) HomeAccentGreen else softCard)
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .clickable { cuentaSeleccionadaId = cuenta.id },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = cuenta.nombre,
+                            color = if (selected) Color.Black else textPrimary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                TextButton(
+                    onClick = {
+                        viewModel.setNombreUsuario(nombreUsuarioInput.trim().ifBlank { "Usuario" })
+                        if (cuentaSeleccionadaId != 0) {
+                            viewModel.setCuentaActual(cuentaSeleccionadaId)
+                        }
+                        showSettingsSheet = false
+                    }
+                ) {
+                    Text(text = "Guardar", color = HomeAccentGreen)
+                }
+            }
+        }
     }
 }
 

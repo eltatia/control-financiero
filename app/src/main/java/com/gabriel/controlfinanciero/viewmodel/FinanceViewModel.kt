@@ -126,6 +126,17 @@ class FinanceViewModel(
     private val _recordatoriosProximos = MutableStateFlow<List<RecordatorioEntity>>(emptyList())
     val recordatoriosProximos: StateFlow<List<RecordatorioEntity>> = _recordatoriosProximos.asStateFlow()
 
+    // ------------------- AJUSTES (NOMBRE / CUENTA) -------------------
+
+    private val _nombreUsuario = MutableStateFlow("Alex")
+    val nombreUsuario: StateFlow<String> = _nombreUsuario.asStateFlow()
+
+    private val _cuentaActualId = MutableStateFlow(0)
+    val cuentaActualId: StateFlow<Int> = _cuentaActualId.asStateFlow()
+
+    private val _cuentaActual = MutableStateFlow<CuentaEntity?>(null)
+    val cuentaActual: StateFlow<CuentaEntity?> = _cuentaActual.asStateFlow()
+
     private val rangeDataFlow = visibleRange.flatMapLatest { (desde, hasta) ->
         combine(
             repository.obtenerTransaccionesRango(desde, hasta),
@@ -159,6 +170,27 @@ class FinanceViewModel(
         viewModelScope.launch {
             repository.obtenerDeudas().collect { lista ->
                 _deudas.value = lista
+            }
+        }
+
+        viewModelScope.launch {
+            repository.userName.collect { nombre ->
+                _nombreUsuario.value = nombre
+            }
+        }
+
+        viewModelScope.launch {
+            repository.accountId.collect { cuentaId ->
+                _cuentaActualId.value = cuentaId
+            }
+        }
+
+        viewModelScope.launch {
+            combine(cuentas, cuentaActualId) { cuentasLista, cuentaId ->
+                cuentasLista.firstOrNull { it.id == cuentaId }
+                    ?: cuentasLista.firstOrNull()
+            }.collect { cuenta ->
+                _cuentaActual.value = cuenta
             }
         }
 
@@ -623,6 +655,18 @@ class FinanceViewModel(
             repository.cargarDatosDemo()
             cargarDatosMes()
             cargarDatosAnuales()
+        }
+    }
+
+    fun setNombreUsuario(nombre: String) {
+        viewModelScope.launch {
+            repository.setUserName(nombre)
+        }
+    }
+
+    fun setCuentaActual(cuentaId: Int) {
+        viewModelScope.launch {
+            repository.setAccountId(cuentaId)
         }
     }
 

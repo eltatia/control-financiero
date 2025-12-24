@@ -3,6 +3,7 @@ package com.gabriel.controlfinanciero.data
 import android.content.Context
 import androidx.room.withTransaction
 import com.gabriel.controlfinanciero.data.local.FinanceDatabase
+import com.gabriel.controlfinanciero.data.local.SettingsDataStore
 import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
 import com.gabriel.controlfinanciero.data.local.entities.DeudaEntity
 import com.gabriel.controlfinanciero.data.local.entities.RecordatorioEntity
@@ -10,7 +11,8 @@ import com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity
 import kotlinx.coroutines.flow.Flow
 
 class FinanceRepository private constructor(
-    private val db: FinanceDatabase
+    private val db: FinanceDatabase,
+    private val settings: SettingsDataStore
 ) {
 
     // ------------------- CUENTAS -------------------
@@ -210,8 +212,22 @@ class FinanceRepository private constructor(
         fun getInstance(context: Context): FinanceRepository {
             return INSTANCE ?: synchronized(this) {
                 val db = FinanceDatabase.getInstance(context)
-                FinanceRepository(db).also { INSTANCE = it }
+                val settings = SettingsDataStore(context.applicationContext)
+                FinanceRepository(db, settings).also { INSTANCE = it }
             }
         }
+    }
+
+    // ------------------- AJUSTES -------------------
+
+    val userName: Flow<String> = settings.userName
+    val accountId: Flow<Int> = settings.accountId
+
+    suspend fun setUserName(name: String) {
+        settings.setUserName(name)
+    }
+
+    suspend fun setAccountId(id: Int) {
+        settings.setAccountId(id)
     }
 }
