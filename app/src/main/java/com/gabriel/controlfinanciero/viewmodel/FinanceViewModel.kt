@@ -113,6 +113,14 @@ class FinanceViewModel(
     private val _todasTransacciones = MutableStateFlow<List<TransaccionEntity>>(emptyList())
     val todasTransacciones: StateFlow<List<TransaccionEntity>> = _todasTransacciones.asStateFlow()
 
+    // ------------------- SALDOS DE CUENTAS -------------------
+
+    private val _saldoActualCuentas = MutableStateFlow(0.0)
+    val saldoActualCuentas: StateFlow<Double> = _saldoActualCuentas.asStateFlow()
+
+    private val _saldoNetoTrasDeudas = MutableStateFlow(0.0)
+    val saldoNetoTrasDeudas: StateFlow<Double> = _saldoNetoTrasDeudas.asStateFlow()
+
     private val rangeDataFlow = visibleRange.flatMapLatest { (desde, hasta) ->
         combine(
             repository.obtenerTransaccionesRango(desde, hasta),
@@ -534,14 +542,6 @@ class FinanceViewModel(
 
     private val _balanceAnual = MutableStateFlow(0.0)
     val balanceAnual: StateFlow<Double> = _balanceAnual.asStateFlow()
-
-    // ------------------- SALDOS DE CUENTAS -------------------
-
-    private val _saldoActualCuentas = MutableStateFlow(0.0)
-    val saldoActualCuentas: StateFlow<Double> = _saldoActualCuentas.asStateFlow()
-
-    private val _saldoNetoTrasDeudas = MutableStateFlow(0.0)
-    val saldoNetoTrasDeudas: StateFlow<Double> = _saldoNetoTrasDeudas.asStateFlow()
 
     /**
      * Carga las transacciones del año dado (por defecto el año actual)
