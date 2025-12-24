@@ -2,21 +2,7 @@ package com.gabriel.controlfinanciero.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.weight
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,11 +16,16 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -52,11 +43,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gabriel.controlfinanciero.viewmodel.CalendarEvent
+import com.gabriel.controlfinanciero.viewmodel.DayMarker
 import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
-import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -72,10 +63,12 @@ private val TextMuted = Color(0xFF9CA3AF)
 // =============================================================
 //                      PANTALLA CALENDARIO
 // =============================================================
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarioScreen(
     isDarkMode: Boolean,
-    viewModel: FinanceViewModel = viewModel(factory = FinanceViewModel.Factory)
+    viewModel: FinanceViewModel = viewModel(factory = FinanceViewModel.Factory),
+    onNuevaTransaccion: () -> Unit = {}
 ) {
 
     val bgColor = if (isDarkMode) CalendarBackground else Color(0xFFF3F6FF)
@@ -84,79 +77,28 @@ fun CalendarioScreen(
     val textPrimary = if (isDarkMode) Color.White else Color.Black
     val textMutedColor = if (isDarkMode) TextMuted else Color.Gray
 
-    var mode by remember { mutableStateOf(CalendarMode.MONTH) }
-    var selectedFilter by remember { mutableStateOf(CalendarFilter.TODOS) }
-    var selectedMonth by remember { mutableStateOf(YearMonth.now()) }
-    var selectedDay by remember { mutableStateOf(LocalDate.now().dayOfMonth) }
+    val selectedDate by viewModel.selectedDate.collectAsState()
+    val mode by viewModel.mode.collectAsState()
+    val filter by viewModel.filter.collectAsState()
+    val dayMarkers by viewModel.dayMarkers.collectAsState()
+    val eventosDelDia by viewModel.eventosDelDia.collectAsState()
+    val totalIngresosDia by viewModel.totalIngresosDia.collectAsState()
+    val totalEgresosDia by viewModel.totalEgresosDia.collectAsState()
+    val balanceDia by viewModel.balanceDia.collectAsState()
 
-    val safeSelectedDay = remember(selectedMonth, selectedDay) {
-        selectedDay.coerceAtMost(selectedMonth.lengthOfMonth()).coerceAtLeast(1)
-    }
+    val selectedMonth = remember(selectedDate) { YearMonth.from(selectedDate) }
 
-    val onMonthChange: (YearMonth) -> Unit = { newMonth ->
-        selectedMonth = newMonth
-        selectedDay = 1
-    }
+    var showSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val transaccionesMes by viewModel.transaccionesMes.collectAsState()
-    val deudas by viewModel.deudas.collectAsState()
+    var recordatorioTitulo by remember { mutableStateOf("") }
+    var recordatorioTipo by remember { mutableStateOf("PAGO") }
+    var recordatorioMonto by remember { mutableStateOf("") }
+    var recordatorioNota by remember { mutableStateOf("") }
 
-    LaunchedEffect(selectedMonth) {
-        viewModel.cargarDatosMes(selectedMonth.atDay(1))
-    }
-
-    val eventsByDay: Map<Int, List<CalendarEvent>> = remember(transaccionesMes, deudas, selectedMonth) {
-        val zoneId = ZoneId.systemDefault()
-        val formatter = DateTimeFormatter.ofPattern("d 'de' MMM", Locale("es", "ES"))
-        val events = mutableMapOf<Int, MutableList<CalendarEvent>>()
-
-        transaccionesMes.forEach { transaccion ->
-            val fecha = Instant.ofEpochMilli(transaccion.fecha).atZone(zoneId).toLocalDate()
-            if (YearMonth.from(fecha) == selectedMonth) {
-                val type = if (transaccion.tipo == "INGRESO") CalendarEventType.INGRESO else CalendarEventType.EGRESO
-                events.getOrPut(fecha.dayOfMonth) { mutableListOf() }.add(
-                    CalendarEvent(
-                        title = transaccion.titulo,
-                        subtitle = formatter.format(fecha),
-                        amount = transaccion.monto,
-                        type = type,
-                        date = fecha
-                    )
-                )
-            }
-        }
-
-        deudas.forEach { deuda ->
-            val fecha = deuda.fechaVencimiento?.let {
-                Instant.ofEpochMilli(it).atZone(zoneId).toLocalDate()
-            }
-            if (fecha != null && YearMonth.from(fecha) == selectedMonth) {
-                events.getOrPut(fecha.dayOfMonth) { mutableListOf() }.add(
-                    CalendarEvent(
-                        title = deuda.nombre,
-                        subtitle = "Vence el ${formatter.format(fecha)}",
-                        amount = deuda.montoPendiente,
-                        type = CalendarEventType.RECORDATORIO,
-                        date = fecha
-                    )
-                )
-            }
-        }
-
-        events
-            .mapValues { (_, list) -> list.toList() }
-            .toSortedMap()
-    }
-
-    val eventsForSelectedDay = remember(eventsByDay, safeSelectedDay, selectedFilter) {
-        val dayEvents = eventsByDay[safeSelectedDay].orEmpty()
-        dayEvents.filter { event ->
-            when (selectedFilter) {
-                CalendarFilter.TODOS -> true
-                CalendarFilter.INGRESOS -> event.type == CalendarEventType.INGRESO
-                CalendarFilter.EGRESOS -> event.type == CalendarEventType.EGRESO
-                CalendarFilter.RECORDATORIOS -> event.type == CalendarEventType.RECORDATORIO
-            }
+    LaunchedEffect(selectedDate, mode) {
+        if (mode == "MES") {
+            viewModel.setMes(selectedDate)
         }
     }
 
@@ -211,27 +153,48 @@ fun CalendarioScreen(
             // ================= TOGGLE MES / SEMANA =================
             CalendarModeToggle(
                 currentMode = mode,
-                onModeChange = { mode = it },
+                onModeChange = { newMode ->
+                    if (newMode == "MES") {
+                        viewModel.setMes(selectedDate)
+                    } else {
+                        viewModel.setSemana(selectedDate)
+                    }
+                },
                 cardColor = cardColor,
                 textPrimary = textPrimary
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // ================= CALENDARIO MENSUAL =================
-            CalendarMonthView(
-                month = selectedMonth,
-                selectedDay = safeSelectedDay,
-                eventsByDay = eventsByDay,
-                selectedFilter = selectedFilter,
-                onMonthChange = onMonthChange,
-                onSelectDay = { selectedDay = it },
-                textMutedColor = textMutedColor,
-                textPrimary = textPrimary,
-                accentGreen = AccentGreen,
-                accentRed = AccentRed,
-                accentYellow = AccentYellow
-            )
+            // ================= CALENDARIO =================
+            if (mode == "SEMANA") {
+                CalendarWeekView(
+                    selectedDate = selectedDate,
+                    dayMarkers = dayMarkers,
+                    selectedFilter = filter,
+                    onWeekChange = { baseDate -> viewModel.setSemana(baseDate) },
+                    onSelectDay = { viewModel.seleccionarDia(it) },
+                    textMutedColor = textMutedColor,
+                    textPrimary = textPrimary,
+                    accentGreen = AccentGreen,
+                    accentRed = AccentRed,
+                    accentYellow = AccentYellow
+                )
+            } else {
+                CalendarMonthView(
+                    month = selectedMonth,
+                    selectedDate = selectedDate,
+                    dayMarkers = dayMarkers,
+                    selectedFilter = filter,
+                    onMonthChange = { newMonth -> viewModel.setMes(newMonth.atDay(1)) },
+                    onSelectDay = { viewModel.seleccionarDia(it) },
+                    textMutedColor = textMutedColor,
+                    textPrimary = textPrimary,
+                    accentGreen = AccentGreen,
+                    accentRed = AccentRed,
+                    accentYellow = AccentYellow
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -242,27 +205,31 @@ fun CalendarioScreen(
             ) {
                 FilterChipCalendar(
                     label = "Todos",
-                    selected = selectedFilter == CalendarFilter.TODOS,
-                    onClick = { selectedFilter = CalendarFilter.TODOS },
-                    softCardColor = softCardColor
+                    selected = filter == "TODOS",
+                    onClick = { viewModel.setFiltro("TODOS") },
+                    softCardColor = softCardColor,
+                    textPrimary = textPrimary
                 )
                 FilterChipCalendar(
                     label = "Ingresos",
-                    selected = selectedFilter == CalendarFilter.INGRESOS,
-                    onClick = { selectedFilter = CalendarFilter.INGRESOS },
-                    softCardColor = softCardColor
+                    selected = filter == "INGRESOS",
+                    onClick = { viewModel.setFiltro("INGRESOS") },
+                    softCardColor = softCardColor,
+                    textPrimary = textPrimary
                 )
                 FilterChipCalendar(
                     label = "Egresos",
-                    selected = selectedFilter == CalendarFilter.EGRESOS,
-                    onClick = { selectedFilter = CalendarFilter.EGRESOS },
-                    softCardColor = softCardColor
+                    selected = filter == "EGRESOS",
+                    onClick = { viewModel.setFiltro("EGRESOS") },
+                    softCardColor = softCardColor,
+                    textPrimary = textPrimary
                 )
                 FilterChipCalendar(
                     label = "Recordatorios",
-                    selected = selectedFilter == CalendarFilter.RECORDATORIOS,
-                    onClick = { selectedFilter = CalendarFilter.RECORDATORIOS },
-                    softCardColor = softCardColor
+                    selected = filter == "RECORDATORIOS",
+                    onClick = { viewModel.setFiltro("RECORDATORIOS") },
+                    softCardColor = softCardColor,
+                    textPrimary = textPrimary
                 )
             }
 
@@ -270,47 +237,78 @@ fun CalendarioScreen(
 
             // ================= EVENTOS DEL DÍA =================
             Text(
-                text = "Eventos del ${selectedMonth.atDay(safeSelectedDay).format(DateTimeFormatter.ofPattern("d 'de' MMMM", Locale("es", "ES")))}",
+                text = "Eventos del ${selectedDate.format(DateTimeFormatter.ofPattern("d 'de' MMMM", Locale("es", "ES")))}",
                 color = textPrimary,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 18.sp
             )
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Ingresos: ${formatCurrency(totalIngresosDia)}",
+                    color = AccentGreen,
+                    fontSize = 13.sp
+                )
+                Text(
+                    text = "Egresos: ${formatCurrency(totalEgresosDia)}",
+                    color = AccentRed,
+                    fontSize = 13.sp
+                )
+                Text(
+                    text = "Balance: ${formatCurrency(balanceDia)}",
+                    color = if (balanceDia >= 0) AccentGreen else AccentRed,
+                    fontSize = 13.sp
+                )
+            }
+
             Spacer(modifier = Modifier.height(10.dp))
 
-            if (eventsForSelectedDay.isEmpty()) {
+            if (eventosDelDia.isEmpty()) {
                 Text(
                     text = "No hay eventos programados en esta fecha.",
                     color = textMutedColor,
                     fontSize = 14.sp
                 )
             } else {
-                val lastIndex = eventsForSelectedDay.lastIndex
-                eventsForSelectedDay.sortedBy { it.type.ordinal }.forEachIndexed { index, event ->
+                val lastIndex = eventosDelDia.lastIndex
+                eventosDelDia.forEachIndexed { index, event ->
                     val icon: ImageVector
                     val circleColor: Color
                     val iconTint: Color
                     val amountColor: Color
                     val amountText: String
 
-                    when (event.type) {
-                        CalendarEventType.INGRESO -> {
-                            icon = Icons.Default.ArrowUpward
-                            circleColor = Color(0xFF064E3B)
-                            iconTint = AccentGreen
-                            amountColor = AccentGreen
-                            amountText = "+ ${formatCurrency(event.amount)}"
+                    when (event) {
+                        is CalendarEvent.Tx -> {
+                            if (event.tipo == "INGRESO") {
+                                icon = Icons.Default.ArrowUpward
+                                circleColor = Color(0xFF064E3B)
+                                iconTint = AccentGreen
+                                amountColor = AccentGreen
+                                amountText = "+ ${formatCurrency(event.amount)}"
+                            } else {
+                                icon = Icons.Default.ArrowDownward
+                                circleColor = Color(0xFF450A0A)
+                                iconTint = AccentRed
+                                amountColor = AccentRed
+                                amountText = "- ${formatCurrency(event.amount)}"
+                            }
                         }
 
-                        CalendarEventType.EGRESO -> {
-                            icon = Icons.Default.ArrowDownward
-                            circleColor = Color(0xFF450A0A)
-                            iconTint = AccentRed
-                            amountColor = AccentRed
-                            amountText = "- ${formatCurrency(event.amount)}"
+                        is CalendarEvent.Rem -> {
+                            icon = Icons.Default.Notifications
+                            circleColor = Color(0xFF78350F)
+                            iconTint = AccentYellow
+                            amountColor = AccentYellow
+                            amountText = formatCurrency(event.amount)
                         }
 
-                        CalendarEventType.RECORDATORIO -> {
+                        is CalendarEvent.VenceDeuda -> {
                             icon = Icons.Default.Notifications
                             circleColor = Color(0xFF78350F)
                             iconTint = AccentYellow
@@ -359,66 +357,140 @@ fun CalendarioScreen(
                 textPrimary = textPrimary,
                 textMutedColor = textMutedColor
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            GoalCard(
-                title = "Nuevo Portátil",
-                progress = 1200f,
-                goal = 1500f,
-                cardColor = cardColor,
-                softCardColor = softCardColor,
-                textPrimary = textPrimary,
-                textMutedColor = textMutedColor
-            )
-
-            Spacer(modifier = Modifier.height(80.dp)) // espacio para el FAB
         }
 
-        // ================= FAB (botón +) =================
-        Box(
+        FloatingActionButton(
+            onClick = { showSheet = true },
+            containerColor = AccentGreen,
+            contentColor = Color.Black,
             modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            contentAlignment = Alignment.BottomEnd
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
         ) {
-            Box(
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Agregar"
+            )
+        }
+    }
+
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            sheetState = sheetState,
+            containerColor = cardColor
+        ) {
+            Column(
                 modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(AccentGreen),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Añadir evento",
-                    tint = Color.Black
+                Text(
+                    text = "Agregar",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary
                 )
+
+                TextButton(
+                    onClick = {
+                        showSheet = false
+                        onNuevaTransaccion()
+                    }
+                ) {
+                    Text(text = "Nueva Transacción", color = AccentGreen)
+                }
+
+                Text(
+                    text = "Nuevo Recordatorio",
+                    color = textPrimary,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                OutlinedTextField(
+                    value = recordatorioTitulo,
+                    onValueChange = { recordatorioTitulo = it },
+                    label = { Text("Título") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TipoChip(
+                        label = "PAGO",
+                        selected = recordatorioTipo == "PAGO",
+                        onClick = { recordatorioTipo = "PAGO" },
+                        softCardColor = softCardColor,
+                        textPrimary = textPrimary
+                    )
+                    TipoChip(
+                        label = "COBRO",
+                        selected = recordatorioTipo == "COBRO",
+                        onClick = { recordatorioTipo = "COBRO" },
+                        softCardColor = softCardColor,
+                        textPrimary = textPrimary
+                    )
+                    TipoChip(
+                        label = "NOTA",
+                        selected = recordatorioTipo == "NOTA",
+                        onClick = { recordatorioTipo = "NOTA" },
+                        softCardColor = softCardColor,
+                        textPrimary = textPrimary
+                    )
+                }
+
+                OutlinedTextField(
+                    value = recordatorioMonto,
+                    onValueChange = { recordatorioMonto = it },
+                    label = { Text("Monto (opcional)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = recordatorioNota,
+                    onValueChange = { recordatorioNota = it },
+                    label = { Text("Nota (opcional)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Text(
+                    text = "Fecha: ${selectedDate.format(DateTimeFormatter.ofPattern("d 'de' MMM", Locale("es", "ES")))}",
+                    color = textMutedColor,
+                    fontSize = 12.sp
+                )
+
+                TextButton(
+                    onClick = {
+                        val monto = recordatorioMonto.toDoubleOrNull()
+                        viewModel.crearRecordatorio(
+                            titulo = recordatorioTitulo,
+                            tipo = recordatorioTipo,
+                            monto = monto,
+                            nota = recordatorioNota.takeIf { it.isNotBlank() },
+                            fechaSeleccionada = selectedDate
+                        )
+                        recordatorioTitulo = ""
+                        recordatorioMonto = ""
+                        recordatorioNota = ""
+                        recordatorioTipo = "PAGO"
+                        showSheet = false
+                    },
+                    enabled = recordatorioTitulo.isNotBlank()
+                ) {
+                    Text(text = "Guardar", color = AccentGreen)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }
 }
 
-// =============================================================
-//                      COMPONENTES CALENDARIO
-// =============================================================
-
-private enum class CalendarMode { MONTH, WEEK }
-private enum class CalendarFilter { TODOS, INGRESOS, EGRESOS, RECORDATORIOS }
-private enum class CalendarEventType { INGRESO, EGRESO, RECORDATORIO }
-
-private data class CalendarEvent(
-    val title: String,
-    val subtitle: String,
-    val amount: Double?,
-    val type: CalendarEventType,
-    val date: LocalDate
-)
-
-@Composable
 private fun CalendarModeToggle(
-    currentMode: CalendarMode,
-    onModeChange: (CalendarMode) -> Unit,
+    currentMode: String,
+    onModeChange: (String) -> Unit,
     cardColor: Color,
     textPrimary: Color
 ) {
@@ -435,16 +507,16 @@ private fun CalendarModeToggle(
         ) {
             ModeChip(
                 label = "Mes",
-                selected = currentMode == CalendarMode.MONTH,
-                onClick = { onModeChange(CalendarMode.MONTH) },
+                selected = currentMode == "MES",
+                onClick = { onModeChange("MES") },
                 modifier = Modifier.weight(1f),
                 textPrimary = textPrimary
             )
             Spacer(modifier = Modifier.width(4.dp))
             ModeChip(
                 label = "Semana",
-                selected = currentMode == CalendarMode.WEEK,
-                onClick = { onModeChange(CalendarMode.WEEK) },
+                selected = currentMode == "SEMANA",
+                onClick = { onModeChange("SEMANA") },
                 modifier = Modifier.weight(1f),
                 textPrimary = textPrimary
             )
@@ -480,11 +552,11 @@ private fun ModeChip(
 @Composable
 private fun CalendarMonthView(
     month: YearMonth,
-    selectedDay: Int,
-    eventsByDay: Map<Int, List<CalendarEvent>>,
-    selectedFilter: CalendarFilter,
+    selectedDate: LocalDate,
+    dayMarkers: Map<LocalDate, DayMarker>,
+    selectedFilter: String,
     onMonthChange: (YearMonth) -> Unit,
-    onSelectDay: (Int) -> Unit,
+    onSelectDay: (LocalDate) -> Unit,
     textMutedColor: Color,
     textPrimary: Color,
     accentGreen: Color,
@@ -562,12 +634,13 @@ private fun CalendarMonthView(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     week.forEach { day ->
+                        val date = day?.let { month.atDay(it) }
                         DayCell(
                             dayNumber = day,
-                            selected = day == selectedDay,
-                            events = day?.let { eventsByDay[it].orEmpty() }.orEmpty(),
+                            selected = date == selectedDate,
+                            marker = date?.let { dayMarkers[it] },
                             selectedFilter = selectedFilter,
-                            onClick = { day?.let { onSelectDay(it) } },
+                            onClick = { date?.let { onSelectDay(it) } },
                             modifier = Modifier.weight(1f),
                             textPrimary = textPrimary,
                             accentGreen = accentGreen,
@@ -582,11 +655,98 @@ private fun CalendarMonthView(
 }
 
 @Composable
+private fun CalendarWeekView(
+    selectedDate: LocalDate,
+    dayMarkers: Map<LocalDate, DayMarker>,
+    selectedFilter: String,
+    onWeekChange: (LocalDate) -> Unit,
+    onSelectDay: (LocalDate) -> Unit,
+    textMutedColor: Color,
+    textPrimary: Color,
+    accentGreen: Color,
+    accentRed: Color,
+    accentYellow: Color
+) {
+    val startOfWeek = selectedDate.minusDays((selectedDate.dayOfWeek.value % 7).toLong())
+    val endOfWeek = startOfWeek.plusDays(6)
+    val formatter = DateTimeFormatter.ofPattern("d MMM", Locale("es", "ES"))
+    val weekLabel = "${formatter.format(startOfWeek)} - ${formatter.format(endOfWeek)}"
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = { onWeekChange(startOfWeek.minusDays(7)) }) {
+                Text("<", color = textPrimary, fontSize = 18.sp)
+            }
+
+            Text(
+                text = weekLabel,
+                color = textPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            TextButton(onClick = { onWeekChange(startOfWeek.plusDays(7)) }) {
+                Text(">", color = textPrimary, fontSize = 18.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        val weekDays = listOf("D", "L", "M", "M", "J", "V", "S")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            weekDays.forEach {
+                Text(
+                    text = it,
+                    color = textMutedColor,
+                    fontSize = 12.sp,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            (0..6).forEach { offset ->
+                val date = startOfWeek.plusDays(offset.toLong())
+                DayCell(
+                    dayNumber = date.dayOfMonth,
+                    selected = date == selectedDate,
+                    marker = dayMarkers[date],
+                    selectedFilter = selectedFilter,
+                    onClick = { onSelectDay(date) },
+                    modifier = Modifier.weight(1f),
+                    textPrimary = textPrimary,
+                    accentGreen = accentGreen,
+                    accentRed = accentRed,
+                    accentYellow = accentYellow
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun DayCell(
     dayNumber: Int?,
     selected: Boolean,
-    events: List<CalendarEvent>,
-    selectedFilter: CalendarFilter,
+    marker: DayMarker?,
+    selectedFilter: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     textPrimary: Color,
@@ -600,21 +760,9 @@ private fun DayCell(
         contentAlignment = Alignment.Center
     ) {
         if (dayNumber != null) {
-            val filteredEvents = events.filter {
-                when (selectedFilter) {
-                    CalendarFilter.TODOS -> true
-                    CalendarFilter.INGRESOS -> it.type == CalendarEventType.INGRESO
-                    CalendarFilter.EGRESOS -> it.type == CalendarEventType.EGRESO
-                    CalendarFilter.RECORDATORIOS -> it.type == CalendarEventType.RECORDATORIO
-                }
-            }
-
-            val dotColor = when {
-                filteredEvents.any { it.type == CalendarEventType.EGRESO } -> accentRed
-                filteredEvents.any { it.type == CalendarEventType.INGRESO } -> accentGreen
-                filteredEvents.any { it.type == CalendarEventType.RECORDATORIO } -> accentYellow
-                else -> null
-            }
+            val showIngreso = marker?.ingreso == true && (selectedFilter == "TODOS" || selectedFilter == "INGRESOS")
+            val showEgreso = marker?.egreso == true && (selectedFilter == "TODOS" || selectedFilter == "EGRESOS")
+            val showRecordatorio = marker?.recordatorio == true && (selectedFilter == "TODOS" || selectedFilter == "RECORDATORIOS")
 
             val dayText = dayNumber.toString()
             val dayContent: @Composable () -> Unit = {
@@ -658,23 +806,40 @@ private fun DayCell(
                     dayContent()
                 }
 
-                if (dotColor != null) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.BottomCenter
+                if (showIngreso || showEgreso || showRecordatorio) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = 4.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.Bottom
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .offset(y = 2.dp)
-                                .size(5.dp)
-                                .clip(CircleShape)
-                                .background(dotColor)
-                        )
+                        if (showIngreso) {
+                            MarkerDot(color = accentGreen)
+                        }
+                        if (showEgreso) {
+                            MarkerDot(color = accentRed)
+                        }
+                        if (showRecordatorio) {
+                            MarkerDot(color = accentYellow)
+                        }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun MarkerDot(color: Color) {
+    Box(
+        modifier = Modifier
+            .offset(y = 2.dp)
+            .size(6.dp)
+            .clip(CircleShape)
+            .background(color)
+    )
+    Spacer(modifier = Modifier.width(4.dp))
 }
 
 private fun formatCurrency(amount: Double?): String {
@@ -690,16 +855,45 @@ private fun FilterChipCalendar(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
-    softCardColor: Color
+    softCardColor: Color,
+    textPrimary: Color
 ) {
     val bg = if (selected) AccentGreen else softCardColor
-    val textColor = if (selected) Color.Black else Color.White
+    val textColor = if (selected) Color.Black else textPrimary
 
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
             .background(bg)
+            .clickable { onClick() }
             .padding(horizontal = 14.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = label,
+            color = textColor,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun TipoChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    softCardColor: Color,
+    textPrimary: Color
+) {
+    val bg = if (selected) AccentGreen else softCardColor
+    val textColor = if (selected) Color.Black else textPrimary
+
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(bg)
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
         Text(
             text = label,

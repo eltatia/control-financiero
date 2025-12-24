@@ -9,14 +9,56 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.gabriel.controlfinanciero.data.FinanceRepository
 import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
 import com.gabriel.controlfinanciero.data.local.entities.DeudaEntity
+import com.gabriel.controlfinanciero.data.local.entities.RecordatorioEntity
 import com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+data class DayMarker(
+    val ingreso: Boolean,
+    val egreso: Boolean,
+    val recordatorio: Boolean
+)
+
+sealed class CalendarEvent {
+    abstract val date: LocalDate
+    abstract val title: String
+    abstract val subtitle: String
+    abstract val amount: Double?
+
+    data class Tx(
+        override val date: LocalDate,
+        override val title: String,
+        override val subtitle: String,
+        override val amount: Double,
+        val tipo: String
+    ) : CalendarEvent()
+
+    data class Rem(
+        override val date: LocalDate,
+        override val title: String,
+        override val subtitle: String,
+        override val amount: Double?,
+        val tipo: String
+    ) : CalendarEvent()
+
+    data class VenceDeuda(
+        override val date: LocalDate,
+        override val title: String,
+        override val subtitle: String,
+        override val amount: Double?,
+        val estado: String
+    ) : CalendarEvent()
+}
 
 class FinanceViewModel(
     application: Application
@@ -24,6 +66,45 @@ class FinanceViewModel(
 
     private val repository: FinanceRepository =
         FinanceRepository.getInstance(application)
+
+    // ------------------- CALENDARIO -------------------
+
+    private val _selectedDate = MutableStateFlow(LocalDate.now())
+    val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
+
+    private val _mode = MutableStateFlow("MES")
+    val mode: StateFlow<String> = _mode.asStateFlow()
+
+    private val _filter = MutableStateFlow("TODOS")
+    val filter: StateFlow<String> = _filter.asStateFlow()
+
+    private val _visibleRange = MutableStateFlow(0L to 0L)
+    val visibleRange: StateFlow<Pair<Long, Long>> = _visibleRange.asStateFlow()
+
+    private val _dayMarkers = MutableStateFlow<Map<LocalDate, DayMarker>>(emptyMap())
+    val dayMarkers: StateFlow<Map<LocalDate, DayMarker>> = _dayMarkers.asStateFlow()
+
+    private val _eventosDelDia = MutableStateFlow<List<CalendarEvent>>(emptyList())
+    val eventosDelDia: StateFlow<List<CalendarEvent>> = _eventosDelDia.asStateFlow()
+
+    private val _totalIngresosDia = MutableStateFlow(0.0)
+    val totalIngresosDia: StateFlow<Double> = _totalIngresosDia.asStateFlow()
+
+    private val _totalEgresosDia = MutableStateFlow(0.0)
+    val totalEgresosDia: StateFlow<Double> = _totalEgresosDia.asStateFlow()
+
+    private val _balanceDia = MutableStateFlow(0.0)
+    val balanceDia: StateFlow<Double> = _balanceDia.asStateFlow()
+
+    private val rangeDataFlow = visibleRange.flatMapLatest { (desde, hasta) ->
+        combine(
+            repository.obtenerTransaccionesRango(desde, hasta),
+            repository.obtenerRecordatoriosRango(desde, hasta),
+            deudas
+        ) { transacciones, recordatorios, deudasLista ->
+            CalendarRangeData(transacciones, recordatorios, deudasLista)
+        }
+    }
 
     // ------------------- CUENTAS -------------------
 
@@ -43,6 +124,8 @@ class FinanceViewModel(
     // ------------------- INIT -------------------
 
     init {
+        setMes(LocalDate.now())
+
         // Cuentas
         viewModelScope.launch {
             repository.obtenerCuentas().collect { lista ->
@@ -82,6 +165,23 @@ class FinanceViewModel(
             }.collect { (saldoCuentas, saldoNeto) ->
                 _saldoActualCuentas.value = saldoCuentas
                 _saldoNetoTrasDeudas.value = saldoNeto
+            }
+        }
+
+        viewModelScope.launch {
+            rangeDataFlow.collect { data ->
+                _dayMarkers.value = buildDayMarkers(data)
+            }
+        }
+
+        viewModelScope.launch {
+            combine(rangeDataFlow, selectedDate, filter) { data, date, filtro ->
+                buildEventosDelDia(data, date, filtro)
+            }.collect { resultado ->
+                _eventosDelDia.value = resultado.eventos
+                _totalIngresosDia.value = resultado.ingresos
+                _totalEgresosDia.value = resultado.egresos
+                _balanceDia.value = resultado.ingresos - resultado.egresos
             }
         }
     }
@@ -187,6 +287,194 @@ class FinanceViewModel(
         }
     }
 
+    fun setMes(fecha: LocalDate) {
+        _mode.value = "MES"
+        val firstDay = fecha.withDayOfMonth(1)
+        val lastDay = fecha.withDayOfMonth(fecha.lengthOfMonth())
+        val zoneId = ZoneId.systemDefault()
+        val desde = firstDay.atStartOfDay(zoneId).toInstant().toEpochMilli()
+        val hasta = lastDay.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
+        _visibleRange.value = desde to hasta
+        _selectedDate.value = fecha
+    }
+
+    fun setSemana(fecha: LocalDate) {
+        _mode.value = "SEMANA"
+        val startOfWeek = fecha.minusDays((fecha.dayOfWeek.value % 7).toLong())
+        val endOfWeek = startOfWeek.plusDays(6)
+        val zoneId = ZoneId.systemDefault()
+        val desde = startOfWeek.atStartOfDay(zoneId).toInstant().toEpochMilli()
+        val hasta = endOfWeek.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
+        _visibleRange.value = desde to hasta
+        _selectedDate.value = fecha
+    }
+
+    fun seleccionarDia(dia: LocalDate) {
+        _selectedDate.value = dia
+    }
+
+    fun setFiltro(filtro: String) {
+        _filter.value = filtro
+    }
+
+    fun crearRecordatorio(
+        titulo: String,
+        tipo: String,
+        monto: Double?,
+        nota: String?,
+        fechaSeleccionada: LocalDate
+    ) {
+        if (titulo.isBlank()) return
+        val zoneId = ZoneId.systemDefault()
+        val fechaMillis = fechaSeleccionada.atStartOfDay(zoneId).toInstant().toEpochMilli()
+
+        viewModelScope.launch {
+            val recordatorio = RecordatorioEntity(
+                titulo = titulo,
+                fechaMillis = fechaMillis,
+                tipo = tipo,
+                monto = monto,
+                nota = nota
+            )
+            repository.crearRecordatorio(recordatorio)
+        }
+    }
+
+    private fun buildDayMarkers(data: CalendarRangeData): Map<LocalDate, DayMarker> {
+        val markers = mutableMapOf<LocalDate, DayMarker>()
+        val zoneId = ZoneId.systemDefault()
+
+        fun updateMarker(
+            date: LocalDate,
+            ingreso: Boolean = false,
+            egreso: Boolean = false,
+            recordatorio: Boolean = false
+        ) {
+            val current = markers[date] ?: DayMarker(false, false, false)
+            markers[date] = current.copy(
+                ingreso = current.ingreso || ingreso,
+                egreso = current.egreso || egreso,
+                recordatorio = current.recordatorio || recordatorio
+            )
+        }
+
+        data.transacciones.forEach { transaccion ->
+            val date = Instant.ofEpochMilli(transaccion.fecha).atZone(zoneId).toLocalDate()
+            updateMarker(
+                date = date,
+                ingreso = transaccion.tipo == "INGRESO",
+                egreso = transaccion.tipo == "EGRESO"
+            )
+        }
+
+        data.recordatorios.forEach { recordatorio ->
+            val date = Instant.ofEpochMilli(recordatorio.fechaMillis).atZone(zoneId).toLocalDate()
+            updateMarker(date = date, recordatorio = true)
+        }
+
+        val (desde, hasta) = _visibleRange.value
+        data.deudas.forEach { deuda ->
+            val fechaMillis = deuda.fechaVencimiento ?: return@forEach
+            if (deuda.estado != "ACTIVA") return@forEach
+            if (fechaMillis < desde || fechaMillis > hasta) return@forEach
+            val date = Instant.ofEpochMilli(fechaMillis).atZone(zoneId).toLocalDate()
+            updateMarker(date = date, recordatorio = true)
+        }
+
+        return markers.toSortedMap()
+    }
+
+    private fun buildEventosDelDia(
+        data: CalendarRangeData,
+        date: LocalDate,
+        filtro: String
+    ): DayEventsResult {
+        val zoneId = ZoneId.systemDefault()
+        val formatter = DateTimeFormatter.ofPattern("d 'de' MMM", Locale("es", "ES"))
+        val eventos = mutableListOf<CalendarEvent>()
+
+        data.transacciones.forEach { transaccion ->
+            val transDate = Instant.ofEpochMilli(transaccion.fecha).atZone(zoneId).toLocalDate()
+            if (transDate == date) {
+                val subtitle = if (transaccion.categoria.isNotBlank()) {
+                    transaccion.categoria
+                } else {
+                    formatter.format(transDate)
+                }
+                eventos.add(
+                    CalendarEvent.Tx(
+                        date = transDate,
+                        title = transaccion.titulo,
+                        subtitle = subtitle,
+                        amount = transaccion.monto,
+                        tipo = transaccion.tipo
+                    )
+                )
+            }
+        }
+
+        data.recordatorios.forEach { recordatorio ->
+            val remDate = Instant.ofEpochMilli(recordatorio.fechaMillis).atZone(zoneId).toLocalDate()
+            if (remDate == date) {
+                val subtitle = recordatorio.nota ?: recordatorio.tipo
+                eventos.add(
+                    CalendarEvent.Rem(
+                        date = remDate,
+                        title = recordatorio.titulo,
+                        subtitle = subtitle,
+                        amount = recordatorio.monto,
+                        tipo = recordatorio.tipo
+                    )
+                )
+            }
+        }
+
+        data.deudas.forEach { deuda ->
+            val fechaMillis = deuda.fechaVencimiento ?: return@forEach
+            if (deuda.estado != "ACTIVA") return@forEach
+            val deudaDate = Instant.ofEpochMilli(fechaMillis).atZone(zoneId).toLocalDate()
+            if (deudaDate == date) {
+                eventos.add(
+                    CalendarEvent.VenceDeuda(
+                        date = deudaDate,
+                        title = deuda.nombre,
+                        subtitle = "Vence el ${formatter.format(deudaDate)}",
+                        amount = deuda.montoPendiente,
+                        estado = deuda.estado
+                    )
+                )
+            }
+        }
+
+        val ingresos = eventos.filterIsInstance<CalendarEvent.Tx>()
+            .filter { it.tipo == "INGRESO" }
+            .sumOf { it.amount }
+        val egresos = eventos.filterIsInstance<CalendarEvent.Tx>()
+            .filter { it.tipo == "EGRESO" }
+            .sumOf { it.amount }
+
+        val filtrados = when (filtro) {
+            "INGRESOS" -> eventos.filterIsInstance<CalendarEvent.Tx>().filter { it.tipo == "INGRESO" }
+            "EGRESOS" -> eventos.filterIsInstance<CalendarEvent.Tx>().filter { it.tipo == "EGRESO" }
+            "RECORDATORIOS" -> eventos.filter {
+                it is CalendarEvent.Rem || it is CalendarEvent.VenceDeuda
+            }
+            else -> eventos
+        }
+
+        val ordenados = filtrados.sortedWith(
+            compareBy<CalendarEvent> { event ->
+                when (event) {
+                    is CalendarEvent.Tx -> if (event.tipo == "INGRESO") 0 else 1
+                    is CalendarEvent.Rem -> 2
+                    is CalendarEvent.VenceDeuda -> 3
+                }
+            }.thenBy { it.title }
+        )
+
+        return DayEventsResult(ordenados, ingresos, egresos)
+    }
+
     // ------------------- TRANSACCIONES ANUALES -------------------
 
     private val _totalIngresosAnual = MutableStateFlow(0.0)
@@ -273,6 +561,18 @@ class FinanceViewModel(
             cargarDatosAnuales()
         }
     }
+
+    private data class CalendarRangeData(
+        val transacciones: List<TransaccionEntity>,
+        val recordatorios: List<RecordatorioEntity>,
+        val deudas: List<DeudaEntity>
+    )
+
+    private data class DayEventsResult(
+        val eventos: List<CalendarEvent>,
+        val ingresos: Double,
+        val egresos: Double
+    )
 
     companion object {
         val Factory = viewModelFactory {

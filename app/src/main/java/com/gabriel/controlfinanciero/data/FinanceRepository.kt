@@ -5,6 +5,7 @@ import androidx.room.withTransaction
 import com.gabriel.controlfinanciero.data.local.FinanceDatabase
 import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
 import com.gabriel.controlfinanciero.data.local.entities.DeudaEntity
+import com.gabriel.controlfinanciero.data.local.entities.RecordatorioEntity
 import com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -105,6 +106,26 @@ class FinanceRepository private constructor(
         )
 
         db.deudaDao().actualizar(actualizada)
+    }
+
+    // ------------------- RECORDATORIOS -------------------
+
+    fun obtenerRecordatoriosRango(
+        desde: Long,
+        hasta: Long
+    ): Flow<List<RecordatorioEntity>> =
+        db.recordatorioDao().obtenerRecordatoriosRango(desde, hasta)
+
+    suspend fun crearRecordatorio(recordatorio: RecordatorioEntity) {
+        db.recordatorioDao().insertar(recordatorio)
+    }
+
+    suspend fun actualizarRecordatorio(recordatorio: RecordatorioEntity) {
+        db.recordatorioDao().actualizar(recordatorio)
+    }
+
+    suspend fun eliminarRecordatorio(recordatorio: RecordatorioEntity) {
+        db.recordatorioDao().eliminar(recordatorio)
     }
 
     // ------------------- DATOS DEMO -------------------
