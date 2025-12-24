@@ -37,6 +37,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +53,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gabriel.controlfinanciero.viewmodel.CalendarEvent
 import com.gabriel.controlfinanciero.viewmodel.DayMarker
 import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -1052,6 +1054,7 @@ private fun SwipeActionRow(
             value == SwipeToDismissBoxValue.EndToStart || value == SwipeToDismissBoxValue.Settled
         }
     )
+    val scope = rememberCoroutineScope()
 
     SwipeToDismissBox(
         state = dismissState,
@@ -1070,7 +1073,7 @@ private fun SwipeActionRow(
                 TextButton(
                     onClick = {
                         onEdit()
-                        dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+                        scope.launch { dismissState.snapTo(SwipeToDismissBoxValue.Settled) }
                     }
                 ) {
                     Text(text = "Editar", color = AccentGreen)
@@ -1079,7 +1082,7 @@ private fun SwipeActionRow(
                 TextButton(
                     onClick = {
                         onDelete()
-                        dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+                        scope.launch { dismissState.snapTo(SwipeToDismissBoxValue.Settled) }
                     }
                 ) {
                     Text(text = "Eliminar", color = AccentRed)
