@@ -49,7 +49,7 @@ private val TextMuted = Color(0xFF9CA3AF)
 @Composable
 fun CuentasScreen(
     isDarkMode: Boolean,
-    viewModel: FinanceViewModel = viewModel()
+    viewModel: FinanceViewModel = viewModel(factory = FinanceViewModel.Factory)
 ) {
     val cuentas by viewModel.cuentas.collectAsState()
     val deudas by viewModel.deudas.collectAsState()
@@ -57,6 +57,10 @@ fun CuentasScreen(
     // Totales anuales (ingresos y egresos)
     val totalIngresosAnual by viewModel.totalIngresosAnual.collectAsState()
     val totalEgresosAnual by viewModel.totalEgresosAnual.collectAsState()
+
+    // Saldos actuales de cuentas y neto con deudas
+    val saldoCuentas by viewModel.saldoActualCuentas.collectAsState()
+    val saldoNetoTrasDeudas by viewModel.saldoNetoTrasDeudas.collectAsState()
 
     // Todas las transacciones (para calcular saldo actual por cuenta)
     val todasTransacciones by viewModel.todasTransacciones.collectAsState()
@@ -98,6 +102,11 @@ fun CuentasScreen(
 
     // ================= ESTADO MENÚ DEL FAB =================
     var fabMenuExpanded by remember { mutableStateOf(false) }
+    var showSettingsMenu by remember { mutableStateOf(false) }
+
+    // Confirmaciones de borrado
+    var cuentaParaEliminar by remember { mutableStateOf<CuentaEntity?>(null) }
+    var deudaParaEliminar by remember { mutableStateOf<DeudaEntity?>(null) }
 
     Box(
         modifier = Modifier
@@ -127,12 +136,27 @@ fun CuentasScreen(
                     modifier = Modifier.weight(1f),
                 )
 
-                IconButton(onClick = { /* ajustes */ }) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Configuración",
-                        tint = textPrimary
-                    )
+                Box {
+                    IconButton(onClick = { showSettingsMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Configuración",
+                            tint = textPrimary
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showSettingsMenu,
+                        onDismissRequest = { showSettingsMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Cargar datos demo") },
+                            onClick = {
+                                showSettingsMenu = false
+                                viewModel.cargarDatosDemo()
+                            }
+                        )
+                    }
                 }
             }
 
@@ -164,6 +188,30 @@ fun CuentasScreen(
                     titulo = "Egresos del año",
                     monto = totalEgresosAnual,
                     colorMonto = AccentRed,
+                    modifier = Modifier.weight(1f),
+                    cardColor = cardColor,
+                    textMutedColor = textMutedColor
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                PatrimonioCard(
+                    titulo = "Saldo de cuentas",
+                    monto = saldoCuentas,
+                    colorMonto = if (saldoCuentas >= 0) AccentGreen else AccentRed,
+                    modifier = Modifier.weight(1f),
+                    cardColor = cardColor,
+                    textMutedColor = textMutedColor
+                )
+                PatrimonioCard(
+                    titulo = "Saldo neto (menos deudas)",
+                    monto = saldoNetoTrasDeudas,
+                    colorMonto = if (saldoNetoTrasDeudas >= 0) AccentGreen else AccentRed,
                     modifier = Modifier.weight(1f),
                     cardColor = cardColor,
                     textMutedColor = textMutedColor
@@ -221,7 +269,7 @@ fun CuentasScreen(
                             showNuevaCuentaDialog = true
                         },
                         onDelete = {
-                            viewModel.eliminarCuenta(cuenta)
+                            cuentaParaEliminar = cuenta
                         }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -259,7 +307,7 @@ fun CuentasScreen(
                             showAbonoDeudaDialog = true
                         },
                         onEliminar = {
-                            viewModel.eliminarDeuda(deuda)
+                            deudaParaEliminar = deuda
                         }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -326,6 +374,60 @@ fun CuentasScreen(
                 }
             }
         }
+    }
+
+    // ================= CONFIRMAR ELIMINACIÓN DE CUENTA =================
+    if (cuentaParaEliminar != null) {
+        AlertDialog(
+            onDismissRequest = { cuentaParaEliminar = null },
+            title = { Text("Eliminar cuenta") },
+            text = {
+                Text(
+                    "Esta acción borrará la cuenta y sus movimientos asociados. ¿Deseas continuar?"
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        cuentaParaEliminar?.let { viewModel.eliminarCuenta(it) }
+                        cuentaParaEliminar = null
+                    }
+                ) {
+                    Text("Eliminar", color = AccentRed)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { cuentaParaEliminar = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // ================= CONFIRMAR ELIMINACIÓN DE DEUDA =================
+    if (deudaParaEliminar != null) {
+        AlertDialog(
+            onDismissRequest = { deudaParaEliminar = null },
+            title = { Text("Eliminar deuda / préstamo") },
+            text = {
+                Text("¿Seguro que deseas eliminar este registro? Esta acción no se puede deshacer.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deudaParaEliminar?.let { viewModel.eliminarDeuda(it) }
+                        deudaParaEliminar = null
+                    }
+                ) {
+                    Text("Eliminar", color = AccentRed)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deudaParaEliminar = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 
     // ================= DIÁLOGO NUEVA / EDITAR CUENTA =================
@@ -725,7 +827,7 @@ private fun AccountItemCard(
 
             Text(
                 text = "S/ ${"%,.2f".format(monto)}",
-                color = textPrimary,
+                color = if (monto >= 0) textPrimary else AccentRed,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp
             )

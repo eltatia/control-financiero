@@ -8,16 +8,19 @@ import kotlinx.coroutines.flow.Flow
 interface CuentaDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertar(cuenta: CuentaEntity)
+    suspend fun insertar(cuenta: CuentaEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertarLista(cuentas: List<CuentaEntity>)
+    suspend fun insertarLista(cuentas: List<CuentaEntity>): List<Long>
 
     @Update
     suspend fun actualizar(cuenta: CuentaEntity)
 
     @Delete
     suspend fun eliminar(cuenta: CuentaEntity)
+
+    @Query("DELETE FROM cuentas")
+    suspend fun eliminarTodas()
 
     @Query("SELECT * FROM cuentas")
     fun obtenerTodas(): Flow<List<CuentaEntity>>

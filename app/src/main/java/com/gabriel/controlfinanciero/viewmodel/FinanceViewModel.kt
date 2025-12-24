@@ -2,7 +2,10 @@ package com.gabriel.controlfinanciero.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.gabriel.controlfinanciero.data.FinanceRepository
 import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
 import com.gabriel.controlfinanciero.data.local.entities.DeudaEntity
@@ -10,6 +13,7 @@ import com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
@@ -36,6 +40,39 @@ class FinanceViewModel(
     private val _todasTransacciones = MutableStateFlow<List<TransaccionEntity>>(emptyList())
     val todasTransacciones: StateFlow<List<TransaccionEntity>> = _todasTransacciones.asStateFlow()
 
+    // ------------------- SALDOS DE CUENTAS (MOVER ARRIBA ANTES DEL INIT) -------------------
+
+    private val _saldoActualCuentas = MutableStateFlow(0.0)
+    val saldoActualCuentas: StateFlow<Double> = _saldoActualCuentas.asStateFlow()
+
+    private val _saldoNetoTrasDeudas = MutableStateFlow(0.0)
+    val saldoNetoTrasDeudas: StateFlow<Double> = _saldoNetoTrasDeudas.asStateFlow()
+
+    // ------------------- TRANSACCIONES DEL MES -------------------
+
+    private val _transaccionesMes = MutableStateFlow<List<TransaccionEntity>>(emptyList())
+    val transaccionesMes: StateFlow<List<TransaccionEntity>> = _transaccionesMes.asStateFlow()
+
+    private val _totalIngresosMes = MutableStateFlow(0.0)
+    val totalIngresosMes: StateFlow<Double> = _totalIngresosMes.asStateFlow()
+
+    private val _totalEgresosMes = MutableStateFlow(0.0)
+    val totalEgresosMes: StateFlow<Double> = _totalEgresosMes.asStateFlow()
+
+    private val _balanceMes = MutableStateFlow(0.0)
+    val balanceMes: StateFlow<Double> = _balanceMes.asStateFlow()
+
+    // ------------------- TRANSACCIONES ANUALES -------------------
+
+    private val _totalIngresosAnual = MutableStateFlow(0.0)
+    val totalIngresosAnual: StateFlow<Double> = _totalIngresosAnual.asStateFlow()
+
+    private val _totalEgresosAnual = MutableStateFlow(0.0)
+    val totalEgresosAnual: StateFlow<Double> = _totalEgresosAnual.asStateFlow()
+
+    private val _balanceAnual = MutableStateFlow(0.0)
+    val balanceAnual: StateFlow<Double> = _balanceAnual.asStateFlow()
+
     // ------------------- INIT -------------------
 
     init {
@@ -57,6 +94,29 @@ class FinanceViewModel(
         viewModelScope.launch {
             repository.obtenerDeudas().collect { lista ->
                 _deudas.value = lista
+            }
+        }
+
+        // Saldo total de cuentas y saldo neto descontando deudas activas
+        viewModelScope.launch {
+            combine(cuentas, todasTransacciones, deudas) { cuentasLista, transacciones, deudasLista ->
+                val saldoCuentas = cuentasLista.sumOf { cuenta ->
+                    val movimiento = transacciones
+                        .filter { it.cuentaId == cuenta.id }
+                        .sumOf { trans ->
+                            if (trans.tipo == "INGRESO") trans.monto else -trans.monto
+                        }
+                    cuenta.saldoInicial + movimiento
+                }
+
+                val deudasPendientes = deudasLista
+                    .filter { it.estado == "ACTIVA" }
+                    .sumOf { it.montoPendiente }
+
+                Pair(saldoCuentas, saldoCuentas - deudasPendientes)
+            }.collect { (saldoCuentas, saldoNeto) ->
+                _saldoActualCuentas.value = saldoCuentas
+                _saldoNetoTrasDeudas.value = saldoNeto
             }
         }
     }
@@ -114,26 +174,14 @@ class FinanceViewModel(
             repository.eliminarDeuda(deuda)
         }
     }
+
     fun abonarDeuda(deuda: DeudaEntity, montoAbono: Double) {
         viewModelScope.launch {
             repository.abonarDeuda(deuda, montoAbono)
         }
     }
 
-
-    // ------------------- TRANSACCIONES DEL MES -------------------
-
-    private val _transaccionesMes = MutableStateFlow<List<TransaccionEntity>>(emptyList())
-    val transaccionesMes: StateFlow<List<TransaccionEntity>> = _transaccionesMes.asStateFlow()
-
-    private val _totalIngresosMes = MutableStateFlow(0.0)
-    val totalIngresosMes: StateFlow<Double> = _totalIngresosMes.asStateFlow()
-
-    private val _totalEgresosMes = MutableStateFlow(0.0)
-    val totalEgresosMes: StateFlow<Double> = _totalEgresosMes.asStateFlow()
-
-    private val _balanceMes = MutableStateFlow(0.0)
-    val balanceMes: StateFlow<Double> = _balanceMes.asStateFlow()
+    // ------------------- CARGA DATOS DEL MES -------------------
 
     /**
      * Carga las transacciones del mes de la fecha dada (por defecto el mes actual)
@@ -145,7 +193,6 @@ class FinanceViewModel(
 
         val zoneId = ZoneId.systemDefault()
         val desde = firstDay.atStartOfDay(zoneId).toInstant().toEpochMilli()
-        // Hasta el último milisegundo del último día
         val hasta = lastDay.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
 
         viewModelScope.launch {
@@ -162,16 +209,7 @@ class FinanceViewModel(
         }
     }
 
-    // ------------------- TRANSACCIONES ANUALES -------------------
-
-    private val _totalIngresosAnual = MutableStateFlow(0.0)
-    val totalIngresosAnual: StateFlow<Double> = _totalIngresosAnual.asStateFlow()
-
-    private val _totalEgresosAnual = MutableStateFlow(0.0)
-    val totalEgresosAnual: StateFlow<Double> = _totalEgresosAnual.asStateFlow()
-
-    private val _balanceAnual = MutableStateFlow(0.0)
-    val balanceAnual: StateFlow<Double> = _balanceAnual.asStateFlow()
+    // ------------------- CARGA DATOS ANUALES -------------------
 
     /**
      * Carga las transacciones del año dado (por defecto el año actual)
@@ -186,13 +224,22 @@ class FinanceViewModel(
         val hasta = lastDay.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
 
         viewModelScope.launch {
-            repository.obtenerTransaccionesRango(desde, hasta).collect { lista ->
+            combine(
+                repository.obtenerTransaccionesRango(desde, hasta),
+                cuentas
+            ) { lista, cuentasLista ->
                 val ingresos = lista.filter { it.tipo == "INGRESO" }.sumOf { it.monto }
+                val ingresosIniciales = cuentasLista
+                    .filter { it.saldoInicial > 0 }
+                    .sumOf { it.saldoInicial }
+
                 val egresos = lista.filter { it.tipo == "EGRESO" }.sumOf { it.monto }
 
-                _totalIngresosAnual.value = ingresos
+                Pair(ingresos + ingresosIniciales, egresos)
+            }.collect { (ingresosTotales, egresos) ->
+                _totalIngresosAnual.value = ingresosTotales
                 _totalEgresosAnual.value = egresos
-                _balanceAnual.value = ingresos - egresos
+                _balanceAnual.value = ingresosTotales - egresos
             }
         }
     }
@@ -222,6 +269,24 @@ class FinanceViewModel(
                 nota = nota
             )
             repository.registrarTransaccion(transaccion)
+        }
+    }
+
+    fun cargarDatosDemo() {
+        viewModelScope.launch {
+            repository.cargarDatosDemo()
+            cargarDatosMes()
+            cargarDatosAnuales()
+        }
+    }
+
+    companion object {
+        val Factory = viewModelFactory {
+            initializer {
+                val app =
+                    (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as Application)
+                FinanceViewModel(app)
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.gabriel.controlfinanciero.data
 
 import android.content.Context
+import androidx.room.withTransaction
 import com.gabriel.controlfinanciero.data.local.FinanceDatabase
 import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
 import com.gabriel.controlfinanciero.data.local.entities.DeudaEntity
@@ -104,6 +105,100 @@ class FinanceRepository private constructor(
         )
 
         db.deudaDao().actualizar(actualizada)
+    }
+
+    // ------------------- RECORDATORIOS -------------------
+
+    fun obtenerRecordatoriosRango(
+        desde: Long,
+        hasta: Long
+    ): Flow<List<RecordatorioEntity>> =
+        db.recordatorioDao().obtenerRecordatoriosRango(desde, hasta)
+
+    suspend fun crearRecordatorio(recordatorio: RecordatorioEntity) {
+        db.recordatorioDao().insertar(recordatorio)
+    }
+
+    suspend fun actualizarRecordatorio(recordatorio: RecordatorioEntity) {
+        db.recordatorioDao().actualizar(recordatorio)
+    }
+
+    suspend fun eliminarRecordatorio(recordatorio: RecordatorioEntity) {
+        db.recordatorioDao().eliminar(recordatorio)
+    }
+
+
+    // ------------------- DATOS DEMO -------------------
+
+    suspend fun cargarDatosDemo() {
+        val ahora = System.currentTimeMillis()
+        val unDiaMillis = 24 * 60 * 60 * 1000L
+
+        db.withTransaction {
+            db.transaccionDao().eliminarTodas()
+            db.deudaDao().eliminarTodas()
+            db.cuentaDao().eliminarTodas()
+
+            val cuentasIds = db.cuentaDao().insertarLista(
+                listOf(
+                    CuentaEntity(nombre = "Efectivo", tipo = "EFECTIVO", saldoInicial = 420.0),
+                    CuentaEntity(nombre = "Banco Principal", tipo = "BANCO", saldoInicial = 3250.0),
+                    CuentaEntity(nombre = "Ahorros viaje", tipo = "BILLETERA", saldoInicial = 1500.0)
+                )
+            )
+
+            val cuentaEfectivo = cuentasIds.getOrNull(0)?.toInt() ?: 0
+            val cuentaBanco = cuentasIds.getOrNull(1)?.toInt() ?: 0
+            val cuentaAhorros = cuentasIds.getOrNull(2)?.toInt() ?: 0
+
+            db.transaccionDao().insertarLista(
+                listOf(
+                    TransaccionEntity(
+                        titulo = "Salario", monto = 2500.0, tipo = "INGRESO",
+                        fecha = ahora - (3 * unDiaMillis), categoria = "Ingresos", cuentaId = cuentaBanco
+                    ),
+                    TransaccionEntity(
+                        titulo = "Comida semanal", monto = 180.0, tipo = "EGRESO",
+                        fecha = ahora - (2 * unDiaMillis), categoria = "Alimentos", cuentaId = cuentaBanco
+                    ),
+                    TransaccionEntity(
+                        titulo = "Gasolina", monto = 60.0, tipo = "EGRESO",
+                        fecha = ahora - unDiaMillis, categoria = "Transporte", cuentaId = cuentaBanco
+                    ),
+                    TransaccionEntity(
+                        titulo = "Ahorro mensual", monto = 300.0, tipo = "EGRESO",
+                        fecha = ahora - unDiaMillis, categoria = "Ahorros", cuentaId = cuentaBanco
+                    ),
+                    TransaccionEntity(
+                        titulo = "Freelance web", monto = 480.0, tipo = "INGRESO",
+                        fecha = ahora - (5 * unDiaMillis), categoria = "Servicios", cuentaId = cuentaEfectivo
+                    ),
+                    TransaccionEntity(
+                        titulo = "Café y snacks", monto = 35.0, tipo = "EGRESO",
+                        fecha = ahora, categoria = "Entretenimiento", cuentaId = cuentaEfectivo
+                    ),
+                    TransaccionEntity(
+                        titulo = "Intereses", monto = 25.0, tipo = "INGRESO",
+                        fecha = ahora - (10 * unDiaMillis), categoria = "Ahorros", cuentaId = cuentaAhorros
+                    )
+                )
+            )
+
+            db.deudaDao().insertarLista(
+                listOf(
+                    DeudaEntity(
+                        nombre = "Tarjeta crédito", montoTotal = 1200.0, montoPendiente = 850.0,
+                        fechaRegistro = ahora - (20 * unDiaMillis), fechaVencimiento = ahora + (10 * unDiaMillis),
+                        tipo = "DEUDA", estado = "ACTIVA"
+                    ),
+                    DeudaEntity(
+                        nombre = "Préstamo familiar", montoTotal = 500.0, montoPendiente = 200.0,
+                        fechaRegistro = ahora - (40 * unDiaMillis), fechaVencimiento = null,
+                        tipo = "PRESTAMO", estado = "ACTIVA"
+                    )
+                )
+            )
+        }
     }
 
     // ------------------- SINGLETON -------------------

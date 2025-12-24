@@ -1,7 +1,15 @@
 package com.gabriel.controlfinanciero.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.rememberModalBottomSheetState
+import com.gabriel.controlfinanciero.viewmodel.CalendarEvent
+import com.gabriel.controlfinanciero.viewmodel.DayMarker
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,6 +29,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +44,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
+import java.time.Instant
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 // Colores base
 private val CalendarBackground = Color(0xFF021712)
@@ -47,8 +65,13 @@ private val TextMuted = Color(0xFF9CA3AF)
 // =============================================================
 //                      PANTALLA CALENDARIO
 // =============================================================
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CalendarioScreen(isDarkMode: Boolean) {
+fun CalendarioScreen(
+    isDarkMode: Boolean,
+    viewModel: FinanceViewModel = viewModel(factory = FinanceViewModel.Factory),
+    onNuevaTransaccion: () -> Unit = {}
+) {
 
     val bgColor = if (isDarkMode) CalendarBackground else Color(0xFFF3F6FF)
     val cardColor = if (isDarkMode) CardDark else Color.White
@@ -58,7 +81,79 @@ fun CalendarioScreen(isDarkMode: Boolean) {
 
     var mode by remember { mutableStateOf(CalendarMode.MONTH) }
     var selectedFilter by remember { mutableStateOf(CalendarFilter.TODOS) }
-    val selectedDay = 16 // fijo para maqueta
+    var selectedMonth by remember { mutableStateOf(YearMonth.now()) }
+    var selectedDay by remember { mutableStateOf(LocalDate.now().dayOfMonth) }
+
+    val safeSelectedDay = remember(selectedMonth, selectedDay) {
+        selectedDay.coerceAtMost(selectedMonth.lengthOfMonth()).coerceAtLeast(1)
+    }
+
+    val onMonthChange: (YearMonth) -> Unit = { newMonth ->
+        selectedMonth = newMonth
+        selectedDay = 1
+    }
+
+    val transaccionesMes by viewModel.transaccionesMes.collectAsState()
+    val deudas by viewModel.deudas.collectAsState()
+
+    LaunchedEffect(selectedMonth) {
+        viewModel.cargarDatosMes(selectedMonth.atDay(1))
+    }
+
+    val eventsByDay: Map<Int, List<CalendarEvent>> = remember(transaccionesMes, deudas, selectedMonth) {
+        val zoneId = ZoneId.systemDefault()
+        val formatter = DateTimeFormatter.ofPattern("d 'de' MMM", Locale("es", "ES"))
+        val events = mutableMapOf<Int, MutableList<CalendarEvent>>()
+
+        transaccionesMes.forEach { transaccion ->
+            val fecha = Instant.ofEpochMilli(transaccion.fecha).atZone(zoneId).toLocalDate()
+            if (YearMonth.from(fecha) == selectedMonth) {
+                val type = if (transaccion.tipo == "INGRESO") CalendarEventType.INGRESO else CalendarEventType.EGRESO
+                events.getOrPut(fecha.dayOfMonth) { mutableListOf() }.add(
+                    CalendarEvent(
+                        title = transaccion.titulo,
+                        subtitle = formatter.format(fecha),
+                        amount = transaccion.monto,
+                        type = type,
+                        date = fecha
+                    )
+                )
+            }
+        }
+
+        deudas.forEach { deuda ->
+            val fecha = deuda.fechaVencimiento?.let {
+                Instant.ofEpochMilli(it).atZone(zoneId).toLocalDate()
+            }
+            if (fecha != null && YearMonth.from(fecha) == selectedMonth) {
+                events.getOrPut(fecha.dayOfMonth) { mutableListOf() }.add(
+                    CalendarEvent(
+                        title = deuda.nombre,
+                        subtitle = "Vence el ${formatter.format(fecha)}",
+                        amount = deuda.montoPendiente,
+                        type = CalendarEventType.RECORDATORIO,
+                        date = fecha
+                    )
+                )
+            }
+        }
+
+        events
+            .mapValues { (_, list) -> list.toList() }
+            .toSortedMap()
+    }
+
+    val eventsForSelectedDay = remember(eventsByDay, safeSelectedDay, selectedFilter) {
+        val dayEvents = eventsByDay[safeSelectedDay].orEmpty()
+        dayEvents.filter { event ->
+            when (selectedFilter) {
+                CalendarFilter.TODOS -> true
+                CalendarFilter.INGRESOS -> event.type == CalendarEventType.INGRESO
+                CalendarFilter.EGRESOS -> event.type == CalendarEventType.EGRESO
+                CalendarFilter.RECORDATORIOS -> event.type == CalendarEventType.RECORDATORIO
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -120,8 +215,12 @@ fun CalendarioScreen(isDarkMode: Boolean) {
 
             // ================= CALENDARIO MENSUAL =================
             CalendarMonthView(
-                monthLabel = "Octubre 2024",
-                selectedDay = selectedDay,
+                month = selectedMonth,
+                selectedDay = safeSelectedDay,
+                eventsByDay = eventsByDay,
+                selectedFilter = selectedFilter,
+                onMonthChange = onMonthChange,
+                onSelectDay = { selectedDay = it },
                 textMutedColor = textMutedColor,
                 textPrimary = textPrimary,
                 accentGreen = AccentGreen,
@@ -164,9 +263,9 @@ fun CalendarioScreen(isDarkMode: Boolean) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ================= EVENTOS DE HOY =================
+            // ================= EVENTOS DEL DÍA =================
             Text(
-                text = "Eventos de Hoy",
+                text = "Eventos del ${selectedMonth.atDay(safeSelectedDay).format(DateTimeFormatter.ofPattern("d 'de' MMMM", Locale("es", "ES")))}",
                 color = textPrimary,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 18.sp
@@ -174,44 +273,65 @@ fun CalendarioScreen(isDarkMode: Boolean) {
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            EventCard(
-                title = "Salario - Empresa X",
-                subtitle = "Pagado",
-                amountText = "+ S/ 2,500.00",
-                amountColor = AccentGreen,
-                circleColor = Color(0xFF064E3B),
-                icon = Icons.Default.ArrowUpward,
-                iconTint = AccentGreen,
-                cardColor = cardColor,
-                textPrimary = textPrimary,
-                textMutedColor = textMutedColor
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            EventCard(
-                title = "Alquiler",
-                subtitle = "Vence en 3 días",
-                amountText = "- S/ 850.00",
-                amountColor = AccentRed,
-                circleColor = Color(0xFF450A0A),
-                icon = Icons.Default.ArrowDownward,
-                iconTint = AccentRed,
-                cardColor = cardColor,
-                textPrimary = textPrimary,
-                textMutedColor = textMutedColor
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            EventCard(
-                title = "Pago Tarjeta de Crédito",
-                subtitle = "Vence Hoy",
-                amountText = "- S/ 120.50",
-                amountColor = AccentRed,
-                circleColor = Color(0xFF78350F),
-                icon = Icons.Default.Notifications,
-                iconTint = AccentYellow,
-                cardColor = cardColor,
-                textPrimary = textPrimary,
-                textMutedColor = textMutedColor
-            )
+            if (eventsForSelectedDay.isEmpty()) {
+                Text(
+                    text = "No hay eventos programados en esta fecha.",
+                    color = textMutedColor,
+                    fontSize = 14.sp
+                )
+            } else {
+                val lastIndex = eventsForSelectedDay.lastIndex
+                eventsForSelectedDay.sortedBy { it.type.ordinal }.forEachIndexed { index, event ->
+                    val icon: ImageVector
+                    val circleColor: Color
+                    val iconTint: Color
+                    val amountColor: Color
+                    val amountText: String
+
+                    when (event.type) {
+                        CalendarEventType.INGRESO -> {
+                            icon = Icons.Default.ArrowUpward
+                            circleColor = Color(0xFF064E3B)
+                            iconTint = AccentGreen
+                            amountColor = AccentGreen
+                            amountText = "+ ${formatCurrency(event.amount)}"
+                        }
+
+                        CalendarEventType.EGRESO -> {
+                            icon = Icons.Default.ArrowDownward
+                            circleColor = Color(0xFF450A0A)
+                            iconTint = AccentRed
+                            amountColor = AccentRed
+                            amountText = "- ${formatCurrency(event.amount)}"
+                        }
+
+                        CalendarEventType.RECORDATORIO -> {
+                            icon = Icons.Default.Notifications
+                            circleColor = Color(0xFF78350F)
+                            iconTint = AccentYellow
+                            amountColor = AccentYellow
+                            amountText = formatCurrency(event.amount)
+                        }
+                    }
+
+                    EventCard(
+                        title = event.title,
+                        subtitle = event.subtitle,
+                        amountText = amountText,
+                        amountColor = amountColor,
+                        circleColor = circleColor,
+                        icon = icon,
+                        iconTint = iconTint,
+                        cardColor = cardColor,
+                        textPrimary = textPrimary,
+                        textMutedColor = textMutedColor
+                    )
+
+                    if (index != lastIndex) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -280,6 +400,15 @@ fun CalendarioScreen(isDarkMode: Boolean) {
 
 private enum class CalendarMode { MONTH, WEEK }
 private enum class CalendarFilter { TODOS, INGRESOS, EGRESOS, RECORDATORIOS }
+private enum class CalendarEventType { INGRESO, EGRESO, RECORDATORIO }
+
+private data class CalendarEvent(
+    val title: String,
+    val subtitle: String,
+    val amount: Double?,
+    val type: CalendarEventType,
+    val date: LocalDate
+)
 
 @Composable
 private fun CalendarModeToggle(
@@ -343,17 +472,30 @@ private fun ModeChip(
     }
 }
 
-// Calendario estático para la maqueta (Octubre 2024)
 @Composable
 private fun CalendarMonthView(
-    monthLabel: String,
+    month: YearMonth,
     selectedDay: Int,
+    eventsByDay: Map<Int, List<CalendarEvent>>,
+    selectedFilter: CalendarFilter,
+    onMonthChange: (YearMonth) -> Unit,
+    onSelectDay: (Int) -> Unit,
     textMutedColor: Color,
     textPrimary: Color,
     accentGreen: Color,
     accentRed: Color,
     accentYellow: Color
 ) {
+    val monthLabel = month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale("es", "ES")))
+        .replaceFirstChar { it.titlecase(Locale.getDefault()) }
+    val daysInMonth = month.lengthOfMonth()
+    val firstDayIndex = month.atDay(1).dayOfWeek.value % 7 // Domingo = 0
+    val totalCells = firstDayIndex + daysInMonth
+    val weeks = (0 until totalCells).map { index ->
+        val dayNumber = index - firstDayIndex + 1
+        dayNumber.takeIf { it in 1..daysInMonth }
+    }.chunked(7)
+
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -364,7 +506,7 @@ private fun CalendarMonthView(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = { }) {
+            TextButton(onClick = { onMonthChange(month.minusMonths(1)) }) {
                 Text("<", color = textPrimary, fontSize = 18.sp)
             }
 
@@ -375,7 +517,7 @@ private fun CalendarMonthView(
                 fontWeight = FontWeight.SemiBold
             )
 
-            TextButton(onClick = { }) {
+            TextButton(onClick = { onMonthChange(month.plusMonths(1)) }) {
                 Text(">", color = textPrimary, fontSize = 18.sp)
             }
         }
@@ -403,30 +545,24 @@ private fun CalendarMonthView(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Matriz de días
-        val daysMatrix = listOf(
-            listOf("", "", "1", "2", "3", "4", "5"),
-            listOf("6", "7", "8", "9", "10", "11", "12"),
-            listOf("13", "14", "15", "16", "17", "18", "19"),
-            listOf("20", "21", "22", "23", "24", "25", "26"),
-            listOf("27", "28", "29", "30", "31", "", "")
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 4.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            daysMatrix.forEach { week ->
+            weeks.forEach { week ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     week.forEach { day ->
                         DayCell(
-                            dayText = day,
-                            selected = day.toIntOrNull() == selectedDay,
+                            dayNumber = day,
+                            selected = day == selectedDay,
+                            events = day?.let { eventsByDay[it].orEmpty() }.orEmpty(),
+                            selectedFilter = selectedFilter,
+                            onClick = { day?.let { onSelectDay(it) } },
                             modifier = Modifier.weight(1f),
                             textPrimary = textPrimary,
                             accentGreen = accentGreen,
@@ -442,8 +578,11 @@ private fun CalendarMonthView(
 
 @Composable
 private fun DayCell(
-    dayText: String,
+    dayNumber: Int?,
     selected: Boolean,
+    events: List<CalendarEvent>,
+    selectedFilter: CalendarFilter,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
     textPrimary: Color,
     accentGreen: Color,
@@ -455,48 +594,86 @@ private fun DayCell(
             .aspectRatio(1f),
         contentAlignment = Alignment.Center
     ) {
-        if (dayText.isNotEmpty()) {
-            if (selected) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(accentGreen),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = dayText,
-                        color = Color.Black,
-                        fontWeight = FontWeight.Bold
-                    )
+        if (dayNumber != null) {
+            val filteredEvents = events.filter {
+                when (selectedFilter) {
+                    CalendarFilter.TODOS -> true
+                    CalendarFilter.INGRESOS -> it.type == CalendarEventType.INGRESO
+                    CalendarFilter.EGRESOS -> it.type == CalendarEventType.EGRESO
+                    CalendarFilter.RECORDATORIOS -> it.type == CalendarEventType.RECORDATORIO
                 }
-            } else {
-                Text(
-                    text = dayText,
-                    color = textPrimary,
-                    fontSize = 14.sp
-                )
             }
 
-            val dayInt = dayText.toInt()
-            val dotColor = when (dayInt) {
-                2, 5 -> accentRed
-                12 -> accentYellow
-                15, 30 -> accentGreen
+            val dotColor = when {
+                filteredEvents.any { it.type == CalendarEventType.EGRESO } -> accentRed
+                filteredEvents.any { it.type == CalendarEventType.INGRESO } -> accentGreen
+                filteredEvents.any { it.type == CalendarEventType.RECORDATORIO } -> accentYellow
                 else -> null
             }
-            if (dotColor != null) {
+
+            val dayText = dayNumber.toString()
+            val dayContent: @Composable () -> Unit = {
+                if (selected) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(accentGreen),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = dayText,
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                } else {
+                    Text(
+                        text = dayText,
+                        color = textPrimary,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(8.dp))
+            ) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .offset(y = 2.dp)
-                        .size(5.dp)
-                        .clip(CircleShape)
-                        .background(dotColor)
-                )
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Transparent)
+                        .padding(4.dp)
+                        .clickable { onClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    dayContent()
+                }
+
+                if (dotColor != null) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .offset(y = 2.dp)
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(dotColor)
+                        )
+                    }
+                }
             }
         }
     }
+}
+
+private fun formatCurrency(amount: Double?): String {
+    return amount?.let { "S/ ${"%,.2f".format(it)}" } ?: "--"
 }
 
 // =============================================================
