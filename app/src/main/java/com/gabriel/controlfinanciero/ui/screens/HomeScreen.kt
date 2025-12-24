@@ -38,6 +38,7 @@ private val HomeDarkBackground = Color(0xFF021712)
 private val HomeDarkCard = Color(0xFF071E1A)
 private val HomeDarkSoft = Color(0xFF0A2320)
 private val HomeAccentGreen = Color(0xFF22C55E)
+private val HomeAccentRed = Color(0xFFEF4444)
 private val HomeTextMuted = Color(0xFF9CA3AF)
 
 // =============================================================
@@ -307,6 +308,7 @@ fun HomeScreen(
     val balance by viewModel.balanceMes.collectAsState()
     val transaccionesMes by viewModel.transaccionesMes.collectAsState()
     val cuentas by viewModel.cuentas.collectAsState()
+    val todasTransacciones by viewModel.todasTransacciones.collectAsState()
     val recordatoriosProximos by viewModel.recordatoriosProximos.collectAsState()
     val nombreUsuario by viewModel.nombreUsuario.collectAsState()
     val cuentaActual by viewModel.cuentaActual.collectAsState()
@@ -379,6 +381,13 @@ fun HomeScreen(
             fecha = fecha,
             monto = recordatorio.monto
         )
+    }
+
+    val saldoCuentaActual = cuentaActual?.let { cuenta ->
+        val movimiento = todasTransacciones
+            .filter { it.cuentaId == cuenta.id }
+            .sumOf { trans -> if (trans.tipo == "INGRESO") trans.monto else -trans.monto }
+        cuenta.saldoInicial + movimiento
     }
 
     Box(
@@ -798,6 +807,33 @@ fun HomeScreen(
                     color = textPrimary
                 )
 
+                cuentaActual?.let { cuenta ->
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = softCard),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "Cuenta actual",
+                                color = textSecondary,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = cuenta.nombre,
+                                color = textPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp
+                            )
+                            Text(
+                                text = "Saldo: S/ ${"%,.2f".format(saldoCuentaActual ?: cuenta.saldoInicial)}",
+                                color = textSecondary,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
+
                 OutlinedTextField(
                     value = nombreUsuarioInput,
                     onValueChange = { nombreUsuarioInput = it },
@@ -807,6 +843,12 @@ fun HomeScreen(
 
                 Text(
                     text = "Cuenta actual",
+                    color = textSecondary,
+                    fontSize = 13.sp
+                )
+
+                Text(
+                    text = "Cuentas disponibles",
                     color = textSecondary,
                     fontSize = 13.sp
                 )
@@ -828,6 +870,15 @@ fun HomeScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
+                }
+
+                TextButton(
+                    onClick = {
+                        viewModel.setLoggedIn(false)
+                        showSettingsSheet = false
+                    }
+                ) {
+                    Text(text = "Cerrar sesión", color = HomeAccentRed)
                 }
 
                 TextButton(

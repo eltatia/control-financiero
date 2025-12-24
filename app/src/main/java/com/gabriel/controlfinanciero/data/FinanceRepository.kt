@@ -222,6 +222,7 @@ class FinanceRepository private constructor(
 
     val userName: Flow<String> = settings.userName
     val accountId: Flow<Int> = settings.accountId
+    val isLoggedIn: Flow<Boolean> = settings.isLoggedIn
 
     suspend fun setUserName(name: String) {
         settings.setUserName(name)
@@ -229,5 +230,9 @@ class FinanceRepository private constructor(
 
     suspend fun setAccountId(id: Int) {
         settings.setAccountId(id)
+    }
+
+    suspend fun setLoggedIn(isLoggedIn: Boolean) {
+        settings.setLoggedIn(isLoggedIn)
     }
 }

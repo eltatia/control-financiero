@@ -137,6 +137,9 @@ class FinanceViewModel(
     private val _cuentaActual = MutableStateFlow<CuentaEntity?>(null)
     val cuentaActual: StateFlow<CuentaEntity?> = _cuentaActual.asStateFlow()
 
+    private val _isLoggedIn = MutableStateFlow(true)
+    val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
+
     private val rangeDataFlow = visibleRange.flatMapLatest { (desde, hasta) ->
         combine(
             repository.obtenerTransaccionesRango(desde, hasta),
@@ -182,6 +185,12 @@ class FinanceViewModel(
         viewModelScope.launch {
             repository.accountId.collect { cuentaId ->
                 _cuentaActualId.value = cuentaId
+            }
+        }
+
+        viewModelScope.launch {
+            repository.isLoggedIn.collect { loggedIn ->
+                _isLoggedIn.value = loggedIn
             }
         }
 
@@ -667,6 +676,12 @@ class FinanceViewModel(
     fun setCuentaActual(cuentaId: Int) {
         viewModelScope.launch {
             repository.setAccountId(cuentaId)
+        }
+    }
+
+    fun setLoggedIn(isLoggedIn: Boolean) {
+        viewModelScope.launch {
+            repository.setLoggedIn(isLoggedIn)
         }
     }
 

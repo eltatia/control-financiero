@@ -5,24 +5,44 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.gabriel.controlfinanciero.ui.screens.CalendarioScreen
 import com.gabriel.controlfinanciero.ui.screens.CuentasScreen
 import com.gabriel.controlfinanciero.ui.screens.HomeScreen
+import com.gabriel.controlfinanciero.ui.screens.LobbyScreen
 import com.gabriel.controlfinanciero.ui.screens.ReportesScreen
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
 
 @Composable
 fun AppNavigation(navController: NavHostController) {
 
     // 🔥 Estado GLOBAL del modo oscuro / claro
     var isDarkMode by rememberSaveable { mutableStateOf(false) }
+    val viewModel: FinanceViewModel = viewModel(factory = FinanceViewModel.Factory)
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+
+    LaunchedEffect(isLoggedIn) {
+        val target = if (isLoggedIn) NavigationItem.Home.route else NavigationItem.Lobby.route
+        navController.navigate(target) {
+            popUpTo(navController.graph.startDestinationId) {
+                inclusive = true
+            }
+            launchSingleTop = true
+        }
+    }
 
     NavHost(
         navController = navController,
-        startDestination = NavigationItem.Home.route
+        startDestination = if (isLoggedIn) NavigationItem.Home.route else NavigationItem.Lobby.route
     ) {
+        composable(NavigationItem.Lobby.route) {
+            LobbyScreen(isDarkMode = isDarkMode, viewModel = viewModel)
+        }
         composable(NavigationItem.Home.route) {
             HomeScreen(
                 isDarkMode = isDarkMode,
