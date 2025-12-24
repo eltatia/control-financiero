@@ -16,6 +16,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -41,6 +42,9 @@ fun LobbyScreen(
     val cuentaActual by viewModel.cuentaActual.collectAsState()
 
     var cuentaSeleccionadaId by remember { mutableStateOf(cuentaActual?.id ?: 0) }
+    var nuevaCuentaNombre by remember { mutableStateOf("") }
+    var nuevaCuentaTipo by remember { mutableStateOf("EFECTIVO") }
+    var nuevaCuentaSaldo by remember { mutableStateOf("") }
 
     val bgColor = if (isDarkMode) Color(0xFF021712) else Color(0xFFF3F6FF)
     val cardColor = if (isDarkMode) Color(0xFF071E1A) else Color.White
@@ -95,6 +99,58 @@ fun LobbyScreen(
                         )
                     }
                 }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Agregar nueva cuenta",
+            color = textPrimary,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 16.sp
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedTextField(
+                value = nuevaCuentaNombre,
+                onValueChange = { nuevaCuentaNombre = it },
+                label = { Text("Nombre de cuenta") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = nuevaCuentaTipo,
+                onValueChange = { nuevaCuentaTipo = it },
+                label = { Text("Tipo (EFECTIVO/BANCO/BILLETERA)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = nuevaCuentaSaldo,
+                onValueChange = { nuevaCuentaSaldo = it },
+                label = { Text("Saldo inicial") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Button(
+                onClick = {
+                    val saldo = nuevaCuentaSaldo.replace(",", ".").toDoubleOrNull() ?: 0.0
+                    viewModel.crearCuenta(
+                        nombre = nuevaCuentaNombre.ifBlank { "Cuenta" },
+                        tipo = nuevaCuentaTipo.ifBlank { "EFECTIVO" },
+                        saldoInicial = saldo
+                    )
+                    nuevaCuentaNombre = ""
+                    nuevaCuentaTipo = "EFECTIVO"
+                    nuevaCuentaSaldo = ""
+                },
+                enabled = nuevaCuentaNombre.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E), contentColor = Color.Black)
+            ) {
+                Text(text = "Crear cuenta")
             }
         }
 

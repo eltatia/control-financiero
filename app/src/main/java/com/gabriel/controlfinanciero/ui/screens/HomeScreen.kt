@@ -328,6 +328,9 @@ fun HomeScreen(
     var showSettingsSheet by remember { mutableStateOf(false) }
     var nombreUsuarioInput by remember { mutableStateOf("") }
     var cuentaSeleccionadaId by remember { mutableStateOf(0) }
+    var nuevaCuentaNombre by remember { mutableStateOf("") }
+    var nuevaCuentaTipo by remember { mutableStateOf("EFECTIVO") }
+    var nuevaCuentaSaldo by remember { mutableStateOf("") }
 
     val bgColor = if (isDarkMode) HomeDarkBackground else Color(0xFFF3F6FF)
     val cardColor = if (isDarkMode) HomeDarkCard else Color.White
@@ -870,6 +873,50 @@ fun HomeScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
+                }
+
+                Text(
+                    text = "Agregar nueva cuenta",
+                    color = textSecondary,
+                    fontSize = 13.sp
+                )
+
+                OutlinedTextField(
+                    value = nuevaCuentaNombre,
+                    onValueChange = { nuevaCuentaNombre = it },
+                    label = { Text("Nombre de cuenta") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = nuevaCuentaTipo,
+                    onValueChange = { nuevaCuentaTipo = it },
+                    label = { Text("Tipo (EFECTIVO/BANCO/BILLETERA)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = nuevaCuentaSaldo,
+                    onValueChange = { nuevaCuentaSaldo = it },
+                    label = { Text("Saldo inicial") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                TextButton(
+                    onClick = {
+                        val saldo = nuevaCuentaSaldo.replace(",", ".").toDoubleOrNull() ?: 0.0
+                        viewModel.crearCuenta(
+                            nombre = nuevaCuentaNombre.ifBlank { "Cuenta" },
+                            tipo = nuevaCuentaTipo.ifBlank { "EFECTIVO" },
+                            saldoInicial = saldo
+                        )
+                        nuevaCuentaNombre = ""
+                        nuevaCuentaTipo = "EFECTIVO"
+                        nuevaCuentaSaldo = ""
+                    },
+                    enabled = nuevaCuentaNombre.isNotBlank()
+                ) {
+                    Text(text = "Crear cuenta", color = HomeAccentGreen)
                 }
 
                 TextButton(
