@@ -98,16 +98,6 @@ class FinanceViewModel(
     private val _balanceDia = MutableStateFlow(0.0)
     val balanceDia: StateFlow<Double> = _balanceDia.asStateFlow()
 
-    private val rangeDataFlow = visibleRange.flatMapLatest { (desde, hasta) ->
-        combine(
-            repository.obtenerTransaccionesRango(desde, hasta),
-            repository.obtenerRecordatoriosRango(desde, hasta),
-            deudas
-        ) { transacciones, recordatorios, deudasLista ->
-            CalendarRangeData(transacciones, recordatorios, deudasLista)
-        }
-    }
-
     // ------------------- CUENTAS -------------------
 
     private val _cuentas = MutableStateFlow<List<CuentaEntity>>(emptyList())
@@ -122,6 +112,16 @@ class FinanceViewModel(
 
     private val _todasTransacciones = MutableStateFlow<List<TransaccionEntity>>(emptyList())
     val todasTransacciones: StateFlow<List<TransaccionEntity>> = _todasTransacciones.asStateFlow()
+
+    private val rangeDataFlow = visibleRange.flatMapLatest { (desde, hasta) ->
+        combine(
+            repository.obtenerTransaccionesRango(desde, hasta),
+            repository.obtenerRecordatoriosRango(desde, hasta),
+            deudas
+        ) { transacciones, recordatorios, deudasLista ->
+            CalendarRangeData(transacciones, recordatorios, deudasLista)
+        }
+    }
 
     // ------------------- INIT -------------------
 
