@@ -187,20 +187,14 @@ fun MovimientoItem(mov: MovimientoUi, darkMode: Boolean) {
 // =============================================================
 //                  MODELO: RECORDATORIOS
 // =============================================================
-data class Recordatorio(
+data class RecordatorioUi(
     val titulo: String,
     val fecha: String,
-    val monto: Float
-)
-
-val listaRecordatorios = listOf(
-    Recordatorio("Pago Internet", "Mañana", 60f),
-    Recordatorio("Pago Luz", "En 3 días", 45f),
-    Recordatorio("Cuota Moto", "En 5 días", 150f)
+    val monto: Double?
 )
 
 @Composable
-fun RecordatorioItem(rec: Recordatorio, darkMode: Boolean) {
+fun RecordatorioItem(rec: RecordatorioUi, darkMode: Boolean) {
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
@@ -244,7 +238,7 @@ fun RecordatorioItem(rec: Recordatorio, darkMode: Boolean) {
             }
 
             Text(
-                "S/ ${rec.monto}",
+                rec.monto?.let { "S/ ${"%,.2f".format(it)}" } ?: "--",
                 fontWeight = FontWeight.Bold,
                 color = if (darkMode) HomeAccentGreen else Color(0xFF3C67FF)
             )
@@ -310,6 +304,7 @@ fun HomeScreen(
     val balance by viewModel.balanceMes.collectAsState()
     val transaccionesMes by viewModel.transaccionesMes.collectAsState()
     val cuentas by viewModel.cuentas.collectAsState()
+    val recordatoriosProximos by viewModel.recordatoriosProximos.collectAsState()
 
     // Cargar datos del mes actual al entrar a Home
     LaunchedEffect(Unit) {
@@ -341,6 +336,42 @@ fun HomeScreen(
                 tipo = it.tipo
             )
         }
+
+    val egresosPorCategoria = transaccionesMes
+        .filter { it.tipo == "EGRESO" }
+        .groupBy { it.categoria.ifBlank { "Otros" } }
+        .mapValues { (_, items) -> items.sumOf { it.monto } }
+        .toList()
+        .sortedByDescending { it.second }
+
+    val topCategorias = egresosPorCategoria.take(4).toMutableList()
+    val restantes = egresosPorCategoria.drop(4).sumOf { it.second }
+    if (restantes > 0.0) {
+        topCategorias.add("Otros" to restantes)
+    }
+
+    val donutColors = listOf(
+        Color(0xFFE74C3C),
+        Color(0xFF3498DB),
+        Color(0xFFF1C40F),
+        Color(0xFF9B59B6),
+        Color(0xFF10B981)
+    )
+
+    val donutValues = if (topCategorias.isNotEmpty()) {
+        topCategorias.map { it.second.toFloat() }
+    } else {
+        listOf(0f)
+    }
+
+    val recordatoriosUi = recordatoriosProximos.map { recordatorio ->
+        val fecha = formatFechaCorta(recordatorio.fechaMillis)
+        RecordatorioUi(
+            titulo = recordatorio.titulo,
+            fecha = fecha,
+            monto = recordatorio.monto
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -503,13 +534,8 @@ fun HomeScreen(
                         ) {
                             DonutChartPremium(
                                 // De momento valores de ejemplo; centro usa totalEgresos real
-                                values = listOf(350f, 280f, 150f, 60f),
-                                colors = listOf(
-                                    Color(0xFFE74C3C), // Transporte
-                                    Color(0xFF3498DB), // Comida
-                                    Color(0xFFF1C40F), // Ocio
-                                    Color(0xFF9B59B6)  // Otros
-                                ),
+                                values = donutValues,
+                                colors = donutColors,
                                 modifier = Modifier.size(140.dp),
                                 innerColor = if (isDarkMode) cardColor else Color.White
                             )
@@ -528,15 +554,27 @@ fun HomeScreen(
 
                         Spacer(modifier = Modifier.width(16.dp))
 
-                        // LEYENDA (ejemplo estático)
+                        // LEYENDA
                         Column(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            LegendRow("Transporte", "S/ 350.00", Color(0xFFE74C3C), isDarkMode)
-                            LegendRow("Comida", "S/ 280.25", Color(0xFF3498DB), isDarkMode)
-                            LegendRow("Ocio", "S/ 150.25", Color(0xFFF1C40F), isDarkMode)
-                            LegendRow("Otros", "S/ 60.00", Color(0xFF9B59B6), isDarkMode)
+                            if (topCategorias.isEmpty()) {
+                                Text(
+                                    text = "Sin egresos este mes.",
+                                    color = textSecondary,
+                                    fontSize = 13.sp
+                                )
+                            } else {
+                                topCategorias.forEachIndexed { index, (label, amount) ->
+                                    LegendRow(
+                                        label = label,
+                                        amount = "S/ ${"%,.2f".format(amount)}",
+                                        color = donutColors[index % donutColors.size],
+                                        darkMode = isDarkMode
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -611,8 +649,16 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    listaRecordatorios.forEach { rec ->
-                        RecordatorioItem(rec, darkMode = isDarkMode)
+                    if (recordatoriosUi.isEmpty()) {
+                        Text(
+                            text = "No tienes recordatorios próximos.",
+                            color = textSecondary,
+                            fontSize = 14.sp
+                        )
+                    } else {
+                        recordatoriosUi.forEach { rec ->
+                            RecordatorioItem(rec, darkMode = isDarkMode)
+                        }
                     }
                 }
             }

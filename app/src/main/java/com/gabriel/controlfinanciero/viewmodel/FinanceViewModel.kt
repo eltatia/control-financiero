@@ -121,6 +121,11 @@ class FinanceViewModel(
     private val _saldoNetoTrasDeudas = MutableStateFlow(0.0)
     val saldoNetoTrasDeudas: StateFlow<Double> = _saldoNetoTrasDeudas.asStateFlow()
 
+    // ------------------- RECORDATORIOS (HOME) -------------------
+
+    private val _recordatoriosProximos = MutableStateFlow<List<RecordatorioEntity>>(emptyList())
+    val recordatoriosProximos: StateFlow<List<RecordatorioEntity>> = _recordatoriosProximos.asStateFlow()
+
     private val rangeDataFlow = visibleRange.flatMapLatest { (desde, hasta) ->
         combine(
             repository.obtenerTransaccionesRango(desde, hasta),
@@ -175,6 +180,16 @@ class FinanceViewModel(
             }.collect { (saldoCuentas, saldoNeto) ->
                 _saldoActualCuentas.value = saldoCuentas
                 _saldoNetoTrasDeudas.value = saldoNeto
+            }
+        }
+
+        viewModelScope.launch {
+            val hoy = LocalDate.now()
+            val zoneId = ZoneId.systemDefault()
+            val desde = hoy.atStartOfDay(zoneId).toInstant().toEpochMilli()
+            val hasta = hoy.plusDays(7).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
+            repository.obtenerRecordatoriosRango(desde, hasta).collect { lista ->
+                _recordatoriosProximos.value = lista
             }
         }
 
