@@ -12,7 +12,7 @@ sealed class NavigationItem(
     val title: String,
     val icon: ImageVector
 ) {
-    object Lobby : NavigationItem("lobby", "Lobby", Icons.Filled.Home)
+    object Login : NavigationItem("login", "Login", Icons.Filled.Home)
     object Home : NavigationItem("home", "Inicio", Icons.Filled.Home)
     object Reportes : NavigationItem("reportes", "Reportes", Icons.Filled.Assessment)
     object Calendario : NavigationItem("calendario", "Calendario", Icons.Filled.CalendarToday)

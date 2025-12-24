@@ -9,5 +9,6 @@ data class CuentaEntity(
     val id: Int = 0,
     val nombre: String,
     val tipo: String,          // "EFECTIVO", "BANCO", etc.
-    val saldoInicial: Double = 0.0
+    val saldoInicial: Double = 0.0,
+    val userId: Int
 )

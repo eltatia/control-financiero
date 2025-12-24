@@ -8,6 +8,7 @@ import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
 import com.gabriel.controlfinanciero.data.local.entities.DeudaEntity
 import com.gabriel.controlfinanciero.data.local.entities.RecordatorioEntity
 import com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity
+import com.gabriel.controlfinanciero.data.local.entities.UserEntity
 import kotlinx.coroutines.flow.Flow
 
 class FinanceRepository private constructor(
@@ -20,18 +21,23 @@ class FinanceRepository private constructor(
     fun obtenerCuentas(): Flow<List<CuentaEntity>> =
         db.cuentaDao().obtenerTodas()
 
+    fun obtenerCuentasPorUsuario(userId: Int): Flow<List<CuentaEntity>> =
+        db.cuentaDao().obtenerPorUsuario(userId)
+
     suspend fun crearCuenta(
         nombre: String,
         tipo: String,
-        saldoInicial: Double
+        saldoInicial: Double,
+        userId: Int
     ) {
-        val cuenta = CuentaEntity(
-            nombre = nombre,
-            tipo = tipo,
-            saldoInicial = saldoInicial
-        )
-        db.cuentaDao().insertar(cuenta)
-    }
+            val cuenta = CuentaEntity(
+                nombre = nombre,
+                tipo = tipo,
+                saldoInicial = saldoInicial,
+                userId = userId
+            )
+            db.cuentaDao().insertar(cuenta)
+        }
 
     suspend fun actualizarCuenta(cuenta: CuentaEntity) {
         db.cuentaDao().actualizar(cuenta)
@@ -140,12 +146,14 @@ class FinanceRepository private constructor(
             db.transaccionDao().eliminarTodas()
             db.deudaDao().eliminarTodas()
             db.cuentaDao().eliminarTodas()
+            db.userDao().insertar(UserEntity(username = "Alex", password = "1234"))
 
+            val userId = db.userDao().obtenerPorUsername("Alex")?.id ?: 1
             val cuentasIds = db.cuentaDao().insertarLista(
                 listOf(
-                    CuentaEntity(nombre = "Efectivo", tipo = "EFECTIVO", saldoInicial = 420.0),
-                    CuentaEntity(nombre = "Banco Principal", tipo = "BANCO", saldoInicial = 3250.0),
-                    CuentaEntity(nombre = "Ahorros viaje", tipo = "BILLETERA", saldoInicial = 1500.0)
+                    CuentaEntity(nombre = "Efectivo", tipo = "EFECTIVO", saldoInicial = 420.0, userId = userId),
+                    CuentaEntity(nombre = "Banco Principal", tipo = "BANCO", saldoInicial = 3250.0, userId = userId),
+                    CuentaEntity(nombre = "Ahorros viaje", tipo = "BILLETERA", saldoInicial = 1500.0, userId = userId)
                 )
             )
 
@@ -222,6 +230,7 @@ class FinanceRepository private constructor(
 
     val userName: Flow<String> = settings.userName
     val accountId: Flow<Int> = settings.accountId
+    val userId: Flow<Int> = settings.userId
     val isLoggedIn: Flow<Boolean> = settings.isLoggedIn
 
     suspend fun setUserName(name: String) {
@@ -232,7 +241,20 @@ class FinanceRepository private constructor(
         settings.setAccountId(id)
     }
 
+    suspend fun setUserId(id: Int) {
+        settings.setUserId(id)
+    }
+
     suspend fun setLoggedIn(isLoggedIn: Boolean) {
         settings.setLoggedIn(isLoggedIn)
+    }
+
+    suspend fun obtenerUsuarioPorNombre(username: String): UserEntity? {
+        return db.userDao().obtenerPorUsername(username)
+    }
+
+    suspend fun crearUsuario(username: String, password: String): Int {
+        val usuario = UserEntity(username = username, password = password)
+        return db.userDao().insertar(usuario).toInt()
     }
 }

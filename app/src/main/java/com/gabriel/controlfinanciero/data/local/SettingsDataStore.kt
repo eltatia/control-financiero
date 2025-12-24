@@ -16,6 +16,7 @@ class SettingsDataStore(private val context: Context) {
     private object Keys {
         val USER_NAME = stringPreferencesKey("user_name")
         val ACCOUNT_ID = intPreferencesKey("account_id")
+        val USER_ID = intPreferencesKey("user_id")
         val IS_LOGGED_IN = booleanPreferencesKey("is_logged_in")
     }
 
@@ -27,8 +28,12 @@ class SettingsDataStore(private val context: Context) {
         prefs[Keys.ACCOUNT_ID] ?: 0
     }
 
+    val userId: Flow<Int> = context.settingsDataStore.data.map { prefs ->
+        prefs[Keys.USER_ID] ?: 0
+    }
+
     val isLoggedIn: Flow<Boolean> = context.settingsDataStore.data.map { prefs ->
-        prefs[Keys.IS_LOGGED_IN] ?: true
+        prefs[Keys.IS_LOGGED_IN] ?: false
     }
 
     suspend fun setUserName(name: String) {
@@ -40,6 +45,12 @@ class SettingsDataStore(private val context: Context) {
     suspend fun setAccountId(id: Int) {
         context.settingsDataStore.edit { prefs ->
             prefs[Keys.ACCOUNT_ID] = id
+        }
+    }
+
+    suspend fun setUserId(id: Int) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.USER_ID] = id
         }
     }
 

@@ -5,7 +5,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -327,10 +326,6 @@ fun HomeScreen(
     var cuentaIndex by remember { mutableStateOf(0) }
     var showSettingsSheet by remember { mutableStateOf(false) }
     var nombreUsuarioInput by remember { mutableStateOf("") }
-    var cuentaSeleccionadaId by remember { mutableStateOf(0) }
-    var nuevaCuentaNombre by remember { mutableStateOf("") }
-    var nuevaCuentaTipo by remember { mutableStateOf("EFECTIVO") }
-    var nuevaCuentaSaldo by remember { mutableStateOf("") }
 
     val bgColor = if (isDarkMode) HomeDarkBackground else Color(0xFFF3F6FF)
     val cardColor = if (isDarkMode) HomeDarkCard else Color.White
@@ -457,7 +452,6 @@ fun HomeScreen(
 
                 IconButton(onClick = {
                     nombreUsuarioInput = nombreUsuario
-                    cuentaSeleccionadaId = cuentaActual?.id ?: 0
                     showSettingsSheet = true
                 }) {
                     Icon(
@@ -844,84 +838,9 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Text(
-                    text = "Cuenta actual",
-                    color = textSecondary,
-                    fontSize = 13.sp
-                )
-
-                Text(
-                    text = "Cuentas disponibles",
-                    color = textSecondary,
-                    fontSize = 13.sp
-                )
-
-                cuentas.forEach { cuenta ->
-                    val selected = cuenta.id == cuentaSeleccionadaId
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(if (selected) HomeAccentGreen else softCard)
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
-                            .clickable { cuentaSeleccionadaId = cuenta.id },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = cuenta.nombre,
-                            color = if (selected) Color.Black else textPrimary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                Text(
-                    text = "Agregar nueva cuenta",
-                    color = textSecondary,
-                    fontSize = 13.sp
-                )
-
-                OutlinedTextField(
-                    value = nuevaCuentaNombre,
-                    onValueChange = { nuevaCuentaNombre = it },
-                    label = { Text("Nombre de cuenta") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = nuevaCuentaTipo,
-                    onValueChange = { nuevaCuentaTipo = it },
-                    label = { Text("Tipo (EFECTIVO/BANCO/BILLETERA)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = nuevaCuentaSaldo,
-                    onValueChange = { nuevaCuentaSaldo = it },
-                    label = { Text("Saldo inicial") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
                 TextButton(
                     onClick = {
-                        val saldo = nuevaCuentaSaldo.replace(",", ".").toDoubleOrNull() ?: 0.0
-                        viewModel.crearCuenta(
-                            nombre = nuevaCuentaNombre.ifBlank { "Cuenta" },
-                            tipo = nuevaCuentaTipo.ifBlank { "EFECTIVO" },
-                            saldoInicial = saldo
-                        )
-                        nuevaCuentaNombre = ""
-                        nuevaCuentaTipo = "EFECTIVO"
-                        nuevaCuentaSaldo = ""
-                    },
-                    enabled = nuevaCuentaNombre.isNotBlank()
-                ) {
-                    Text(text = "Crear cuenta", color = HomeAccentGreen)
-                }
-
-                TextButton(
-                    onClick = {
-                        viewModel.setLoggedIn(false)
+                        viewModel.logout()
                         showSettingsSheet = false
                     }
                 ) {
@@ -931,9 +850,6 @@ fun HomeScreen(
                 TextButton(
                     onClick = {
                         viewModel.setNombreUsuario(nombreUsuarioInput.trim().ifBlank { "Usuario" })
-                        if (cuentaSeleccionadaId != 0) {
-                            viewModel.setCuentaActual(cuentaSeleccionadaId)
-                        }
                         showSettingsSheet = false
                     }
                 ) {

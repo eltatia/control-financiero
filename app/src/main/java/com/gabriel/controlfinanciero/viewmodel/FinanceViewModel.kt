@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -140,6 +141,12 @@ class FinanceViewModel(
     private val _isLoggedIn = MutableStateFlow(true)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
+    private val _usuarioActualId = MutableStateFlow(0)
+    val usuarioActualId: StateFlow<Int> = _usuarioActualId.asStateFlow()
+
+    private val _loginError = MutableStateFlow<String?>(null)
+    val loginError: StateFlow<String?> = _loginError.asStateFlow()
+
     private val rangeDataFlow = visibleRange.flatMapLatest { (desde, hasta) ->
         combine(
             repository.obtenerTransaccionesRango(desde, hasta),
@@ -155,11 +162,20 @@ class FinanceViewModel(
     init {
         setMes(LocalDate.now())
 
-        // Cuentas
         viewModelScope.launch {
-            repository.obtenerCuentas().collect { lista ->
-                _cuentas.value = lista
+            repository.userId.collect { userId ->
+                _usuarioActualId.value = userId
             }
+        }
+
+        viewModelScope.launch {
+            usuarioActualId
+                .flatMapLatest { userId ->
+                    if (userId == 0) flowOf(emptyList()) else repository.obtenerCuentasPorUsuario(userId)
+                }
+                .collect { lista ->
+                    _cuentas.value = lista
+                }
         }
 
         // Todas las transacciones
@@ -200,6 +216,9 @@ class FinanceViewModel(
                     ?: cuentasLista.firstOrNull()
             }.collect { cuenta ->
                 _cuentaActual.value = cuenta
+                if (cuentaActualId.value == 0 && cuenta != null) {
+                    repository.setAccountId(cuenta.id)
+                }
             }
         }
 
@@ -260,7 +279,10 @@ class FinanceViewModel(
         saldoInicial: Double
     ) {
         viewModelScope.launch {
-            repository.crearCuenta(nombre, tipo, saldoInicial)
+            val userId = usuarioActualId.value
+            if (userId != 0) {
+                repository.crearCuenta(nombre, tipo, saldoInicial, userId)
+            }
         }
     }
 
@@ -340,7 +362,14 @@ class FinanceViewModel(
         val hasta = lastDay.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
 
         viewModelScope.launch {
-            repository.obtenerTransaccionesRango(desde, hasta).collect { lista ->
+            combine(
+                repository.obtenerTransaccionesRango(desde, hasta),
+                cuentas
+            ) { lista, cuentasLista ->
+                val cuentaIds = cuentasLista.map { it.id }.toSet()
+                val filtradas = lista.filter { it.cuentaId in cuentaIds }
+                filtradas
+            }.collect { lista ->
                 _transaccionesMes.value = lista
 
                 val ingresos = lista.filter { it.tipo == "INGRESO" }.sumOf { it.monto }
@@ -616,11 +645,13 @@ class FinanceViewModel(
                 repository.obtenerTransaccionesRango(desde, hasta),
                 cuentas
             ) { lista, cuentasLista ->
-                val ingresos = lista.filter { it.tipo == "INGRESO" }.sumOf { it.monto }
+                val cuentaIds = cuentasLista.map { it.id }.toSet()
+                val filtradas = lista.filter { it.cuentaId in cuentaIds }
+                val ingresos = filtradas.filter { it.tipo == "INGRESO" }.sumOf { it.monto }
                 val ingresosIniciales = cuentasLista
                     .filter { it.saldoInicial > 0 }
                     .sumOf { it.saldoInicial }
-                val egresos = lista.filter { it.tipo == "EGRESO" }.sumOf { it.monto }
+                val egresos = filtradas.filter { it.tipo == "EGRESO" }.sumOf { it.monto }
 
                 Pair(ingresos + ingresosIniciales, egresos)
             }.collect { (ingresosTotales, egresos) ->
@@ -682,6 +713,39 @@ class FinanceViewModel(
     fun setLoggedIn(isLoggedIn: Boolean) {
         viewModelScope.launch {
             repository.setLoggedIn(isLoggedIn)
+        }
+    }
+
+    fun login(username: String, password: String) {
+        viewModelScope.launch {
+            if (username.isBlank() || password.isBlank()) {
+                _loginError.value = "Completa usuario y contraseña."
+                return@launch
+            }
+
+            val existingUser = repository.obtenerUsuarioPorNombre(username)
+            if (existingUser == null) {
+                val newUserId = repository.crearUsuario(username, password)
+                repository.setUserId(newUserId)
+                repository.setUserName(username)
+                repository.setLoggedIn(true)
+                _loginError.value = null
+            } else if (existingUser.password == password) {
+                repository.setUserId(existingUser.id)
+                repository.setUserName(existingUser.username)
+                repository.setLoggedIn(true)
+                _loginError.value = null
+            } else {
+                _loginError.value = "Usuario o contraseña incorrectos."
+            }
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            repository.setLoggedIn(false)
+            repository.setUserId(0)
+            repository.setAccountId(0)
         }
     }
 

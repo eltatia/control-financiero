@@ -25,6 +25,9 @@ interface CuentaDao {
     @Query("SELECT * FROM cuentas")
     fun obtenerTodas(): Flow<List<CuentaEntity>>
 
+    @Query("SELECT * FROM cuentas WHERE userId = :userId")
+    fun obtenerPorUsuario(userId: Int): Flow<List<CuentaEntity>>
+
     @Query("SELECT * FROM cuentas WHERE id = :id")
     fun obtenerPorId(id: Int): Flow<CuentaEntity?>
 }

@@ -73,6 +73,7 @@ fun ReportesScreen(
     val textPrimary = if (isDarkMode) Color.White else Color.Black
 
     val transacciones by viewModel.todasTransacciones.collectAsState()
+    val cuentas by viewModel.cuentas.collectAsState()
 
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Mes actual", "Mes anterior", "Año actual", "Personalizado")
@@ -100,16 +101,21 @@ fun ReportesScreen(
         }
     }
 
-    val transaccionesRango = remember(transacciones, selectedRange) {
+    val cuentaIds = remember(cuentas) { cuentas.map { it.id }.toSet() }
+    val transaccionesRango = remember(transacciones, selectedRange, cuentaIds) {
         transacciones.filter { transaccion ->
             val fecha = Instant.ofEpochMilli(transaccion.fecha).atZone(zoneId).toLocalDate()
-            !fecha.isBefore(selectedRange.first) && !fecha.isAfter(selectedRange.second)
+            !fecha.isBefore(selectedRange.first) &&
+                !fecha.isAfter(selectedRange.second) &&
+                transaccion.cuentaId in cuentaIds
         }
     }
-    val transaccionesPrevias = remember(transacciones, previousRange) {
+    val transaccionesPrevias = remember(transacciones, previousRange, cuentaIds) {
         transacciones.filter { transaccion ->
             val fecha = Instant.ofEpochMilli(transaccion.fecha).atZone(zoneId).toLocalDate()
-            !fecha.isBefore(previousRange.first) && !fecha.isAfter(previousRange.second)
+            !fecha.isBefore(previousRange.first) &&
+                !fecha.isAfter(previousRange.second) &&
+                transaccion.cuentaId in cuentaIds
         }
     }
 
@@ -142,14 +148,14 @@ fun ReportesScreen(
         buildChartLabels(selectedRange.first, selectedRange.second)
     }
 
-    val mesesSerie = remember(transacciones) {
+    val mesesSerie = remember(transacciones, cuentaIds) {
         val meses = (0..3).map { YearMonth.from(today).minusMonths((3 - it).toLong()) }
         val ingresosSerie = meses.map { month ->
             transacciones
                 .filter { it.tipo == "INGRESO" }
                 .filter { Instant.ofEpochMilli(it.fecha).atZone(zoneId).toLocalDate().let { date ->
                     YearMonth.from(date) == month
-                } }
+                } && it.cuentaId in cuentaIds }
                 .sumOf { it.monto }
                 .toFloat()
         }
@@ -158,7 +164,7 @@ fun ReportesScreen(
                 .filter { it.tipo == "EGRESO" }
                 .filter { Instant.ofEpochMilli(it.fecha).atZone(zoneId).toLocalDate().let { date ->
                     YearMonth.from(date) == month
-                } }
+                } && it.cuentaId in cuentaIds }
                 .sumOf { it.monto }
                 .toFloat()
         }

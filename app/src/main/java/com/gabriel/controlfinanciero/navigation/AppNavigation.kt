@@ -13,7 +13,7 @@ import androidx.navigation.compose.composable
 import com.gabriel.controlfinanciero.ui.screens.CalendarioScreen
 import com.gabriel.controlfinanciero.ui.screens.CuentasScreen
 import com.gabriel.controlfinanciero.ui.screens.HomeScreen
-import com.gabriel.controlfinanciero.ui.screens.LobbyScreen
+import com.gabriel.controlfinanciero.ui.screens.LoginScreen
 import com.gabriel.controlfinanciero.ui.screens.ReportesScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
@@ -27,7 +27,7 @@ fun AppNavigation(navController: NavHostController) {
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
 
     LaunchedEffect(isLoggedIn) {
-        val target = if (isLoggedIn) NavigationItem.Home.route else NavigationItem.Lobby.route
+        val target = if (isLoggedIn) NavigationItem.Home.route else NavigationItem.Login.route
         navController.navigate(target) {
             popUpTo(navController.graph.startDestinationId) {
                 inclusive = true
@@ -38,10 +38,10 @@ fun AppNavigation(navController: NavHostController) {
 
     NavHost(
         navController = navController,
-        startDestination = if (isLoggedIn) NavigationItem.Home.route else NavigationItem.Lobby.route
+        startDestination = if (isLoggedIn) NavigationItem.Home.route else NavigationItem.Login.route
     ) {
-        composable(NavigationItem.Lobby.route) {
-            LobbyScreen(isDarkMode = isDarkMode, viewModel = viewModel)
+        composable(NavigationItem.Login.route) {
+            LoginScreen(isDarkMode = isDarkMode, viewModel = viewModel)
         }
         composable(NavigationItem.Home.route) {
             HomeScreen(
