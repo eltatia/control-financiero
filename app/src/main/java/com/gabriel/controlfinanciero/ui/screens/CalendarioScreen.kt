@@ -488,6 +488,7 @@ fun CalendarioScreen(
     }
 }
 
+@Composable
 private fun CalendarModeToggle(
     currentMode: String,
     onModeChange: (String) -> Unit,
