@@ -762,52 +762,29 @@ class FinanceViewModel(
         }
     }
 
-    fun loginWithAccount(
-        username: String,
-        password: String,
-        accountName: String?,
-        accountType: String?,
-        accountSaldo: Double?
-    ) {
+    fun crearUsuario(username: String, password: String) {
         viewModelScope.launch {
-            if (username.isBlank() || password.isBlank()) {
-                _loginError.value = "Completa usuario y contraseña."
+            if (username.isBlank()) {
+                _loginError.value = "El usuario es obligatorio."
+                return@launch
+            }
+            if (password.isBlank()) {
+                _loginError.value = "La contraseña es obligatoria."
                 return@launch
             }
 
             val existingUser = repository.obtenerUsuarioPorNombre(username)
-            val userId = if (existingUser == null) {
-                repository.crearUsuario(username, password)
-            } else if (existingUser.password == password) {
-                existingUser.id
-            } else {
-                _loginError.value = "Usuario o contraseña incorrectos."
+            if (existingUser != null) {
+                _loginError.value = "El usuario ya existe."
                 return@launch
             }
 
+            val userId = repository.crearUsuario(username, password)
             repository.setUserId(userId)
             repository.setUserName(username)
+            repository.setAccountId(0)
+            repository.setLoggedIn(false)
             _loginError.value = null
-
-            if (!accountName.isNullOrBlank()) {
-                val cuentaId = repository.crearCuenta(
-                    nombre = accountName.trim(),
-                    tipo = accountType?.ifBlank { "EFECTIVO" } ?: "EFECTIVO",
-                    saldoInicial = accountSaldo ?: 0.0,
-                    userId = userId
-                )
-                repository.setAccountId(cuentaId.toInt())
-                repository.setLoggedIn(true)
-            } else {
-                val cuenta = repository.obtenerPrimeraCuentaPorUsuario(userId)
-                if (cuenta == null) {
-                    repository.setLoggedIn(false)
-                    _loginError.value = "Crea una cuenta para ingresar."
-                } else {
-                    repository.setAccountId(cuenta.id)
-                    repository.setLoggedIn(true)
-                }
-            }
         }
     }
 
