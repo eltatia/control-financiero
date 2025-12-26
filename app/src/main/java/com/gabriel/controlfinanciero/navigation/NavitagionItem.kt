@@ -5,6 +5,8 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.ui.graphics.vector.ImageVector
 
 sealed class NavigationItem(
@@ -12,8 +14,8 @@ sealed class NavigationItem(
     val title: String,
     val icon: ImageVector
 ) {
-    object Login : NavigationItem("login", "Login", Icons.Filled.Home)
-    object CrearCuenta : NavigationItem("crear-cuenta", "Crear Cuenta", Icons.Filled.Home)
+    object Login : NavigationItem("login", "Login", Icons.Filled.Person)
+    object CrearCuenta : NavigationItem("crear-cuenta", "Crear Cuenta", Icons.Filled.PersonAdd)
     object Home : NavigationItem("home", "Inicio", Icons.Filled.Home)
     object Reportes : NavigationItem("reportes", "Reportes", Icons.Filled.Assessment)
     object Calendario : NavigationItem("calendario", "Calendario", Icons.Filled.CalendarToday)

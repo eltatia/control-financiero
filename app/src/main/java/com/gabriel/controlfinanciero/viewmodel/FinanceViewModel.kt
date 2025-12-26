@@ -15,6 +15,7 @@ import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
 import com.gabriel.controlfinanciero.data.local.entities.DeudaEntity
 import com.gabriel.controlfinanciero.data.local.entities.RecordatorioEntity
 import com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity
+import com.gabriel.controlfinanciero.notifications.ReminderScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -481,7 +482,13 @@ class FinanceViewModel(
                 nota = nota,
                 accountId = accountId
             )
-            repository.crearRecordatorio(recordatorio)
+            val recordatorioId = repository.crearRecordatorio(recordatorio)
+            if (recordatorioId > 0) {
+                ReminderScheduler.schedule(
+                    context = getApplication(),
+                    recordatorio = recordatorio.copy(id = recordatorioId.toInt())
+                )
+            }
         }
     }
 
@@ -514,6 +521,7 @@ class FinanceViewModel(
                 accountId = accountId
             )
             repository.actualizarRecordatorio(recordatorio)
+            ReminderScheduler.schedule(getApplication(), recordatorio)
         }
     }
 
@@ -533,6 +541,7 @@ class FinanceViewModel(
                 accountId = accountId
             )
             repository.eliminarRecordatorio(recordatorio)
+            ReminderScheduler.cancel(getApplication(), id)
         }
     }
 
