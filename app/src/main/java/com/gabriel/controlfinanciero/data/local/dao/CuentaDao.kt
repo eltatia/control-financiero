@@ -31,6 +31,12 @@ interface CuentaDao {
     @Query("SELECT * FROM cuentas WHERE userId = :userId LIMIT 1")
     suspend fun obtenerPrimeraPorUsuario(userId: Int): CuentaEntity?
 
+    @Query("SELECT * FROM cuentas WHERE userId = :userId")
+    suspend fun obtenerPorUsuarioSync(userId: Int): List<CuentaEntity>
+
+    @Query("DELETE FROM cuentas WHERE userId = :userId")
+    suspend fun eliminarPorUsuario(userId: Int)
+
     @Query("SELECT * FROM cuentas WHERE id = :id")
     fun obtenerPorId(id: Int): Flow<CuentaEntity?>
 }

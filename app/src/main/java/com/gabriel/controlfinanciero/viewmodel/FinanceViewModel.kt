@@ -749,8 +749,15 @@ class FinanceViewModel(
                 repository.setUserName(existingUser.username)
                 val cuenta = repository.obtenerPrimeraCuentaPorUsuario(existingUser.id)
                 if (cuenta == null) {
-                    repository.setLoggedIn(false)
-                    _loginError.value = "Necesitas crear al menos una cuenta para ingresar."
+                    val nuevaCuentaId = repository.crearCuenta(
+                        nombre = "Cuenta principal",
+                        tipo = "EFECTIVO",
+                        saldoInicial = 0.0,
+                        userId = existingUser.id
+                    )
+                    repository.setAccountId(nuevaCuentaId.toInt())
+                    repository.setLoggedIn(true)
+                    _loginError.value = null
                 } else {
                     repository.setAccountId(cuenta.id)
                     repository.setLoggedIn(true)
@@ -775,14 +782,19 @@ class FinanceViewModel(
 
             val existingUser = repository.obtenerUsuarioPorNombre(username)
             if (existingUser != null) {
-                _loginError.value = "El usuario ya existe."
-                return@launch
+                repository.resetUserData(username)
             }
 
             val userId = repository.crearUsuario(username, password)
             repository.setUserId(userId)
             repository.setUserName(username)
-            repository.setAccountId(0)
+            val cuentaId = repository.crearCuenta(
+                nombre = "Cuenta principal",
+                tipo = "EFECTIVO",
+                saldoInicial = 0.0,
+                userId = userId
+            )
+            repository.setAccountId(cuentaId.toInt())
             repository.setLoggedIn(false)
             _loginError.value = null
         }

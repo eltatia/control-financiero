@@ -22,6 +22,9 @@ interface TransaccionDao {
     @Query("DELETE FROM transacciones")
     suspend fun eliminarTodas()
 
+    @Query("DELETE FROM transacciones WHERE cuentaId IN (:cuentaIds)")
+    suspend fun eliminarPorCuentaIds(cuentaIds: List<Int>)
+
     // 🔹 Todas las transacciones (la usaremos para saldo actual por cuenta)
     @Query("SELECT * FROM transacciones ORDER BY fecha DESC")
     fun obtenerTodas(): Flow<List<TransaccionEntity>>

@@ -260,4 +260,15 @@ class FinanceRepository private constructor(
         val usuario = UserEntity(username = username, password = password)
         return db.userDao().insertar(usuario).toInt()
     }
+
+    suspend fun resetUserData(username: String) {
+        val user = db.userDao().obtenerPorUsername(username) ?: return
+        val cuentas = db.cuentaDao().obtenerPorUsuarioSync(user.id)
+        val cuentaIds = cuentas.map { it.id }
+        if (cuentaIds.isNotEmpty()) {
+            db.transaccionDao().eliminarPorCuentaIds(cuentaIds)
+        }
+        db.cuentaDao().eliminarPorUsuario(user.id)
+        db.userDao().eliminarPorUsername(username)
+    }
 }
