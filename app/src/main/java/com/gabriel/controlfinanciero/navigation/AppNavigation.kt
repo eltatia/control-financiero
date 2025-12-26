@@ -13,6 +13,7 @@ import androidx.navigation.compose.composable
 import com.gabriel.controlfinanciero.ui.screens.CalendarioScreen
 import com.gabriel.controlfinanciero.ui.screens.CuentasScreen
 import com.gabriel.controlfinanciero.ui.screens.HomeScreen
+import com.gabriel.controlfinanciero.ui.screens.CreateAccountScreen
 import com.gabriel.controlfinanciero.ui.screens.LoginScreen
 import com.gabriel.controlfinanciero.ui.screens.ReportesScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -41,7 +42,18 @@ fun AppNavigation(navController: NavHostController) {
         startDestination = if (isLoggedIn) NavigationItem.Home.route else NavigationItem.Login.route
     ) {
         composable(NavigationItem.Login.route) {
-            LoginScreen(isDarkMode = isDarkMode, viewModel = viewModel)
+            LoginScreen(
+                isDarkMode = isDarkMode,
+                viewModel = viewModel,
+                onCreateAccount = { navController.navigate(NavigationItem.CrearCuenta.route) }
+            )
+        }
+        composable(NavigationItem.CrearCuenta.route) {
+            CreateAccountScreen(
+                isDarkMode = isDarkMode,
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() }
+            )
         }
         composable(NavigationItem.Home.route) {
             HomeScreen(

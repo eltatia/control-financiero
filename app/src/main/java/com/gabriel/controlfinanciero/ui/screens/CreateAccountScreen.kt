@@ -16,6 +16,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,15 +33,19 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
 
 @Composable
-fun LoginScreen(
+fun CreateAccountScreen(
     isDarkMode: Boolean,
     viewModel: FinanceViewModel = viewModel(factory = FinanceViewModel.Factory),
-    onCreateAccount: () -> Unit
+    onBack: () -> Unit
 ) {
     val loginError by viewModel.loginError.collectAsState()
 
     var usuario by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var cuentaNombre by remember { mutableStateOf("") }
+    var cuentaTipo by remember { mutableStateOf("EFECTIVO") }
+    var cuentaSaldo by remember { mutableStateOf("") }
+
     val bgColor = if (isDarkMode) Color(0xFF021712) else Color(0xFFF3F6FF)
     val cardColor = if (isDarkMode) Color(0xFF071E1A) else Color.White
     val textPrimary = if (isDarkMode) Color.White else Color.Black
@@ -55,7 +60,7 @@ fun LoginScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Bienvenido",
+            text = "Crear cuenta",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = textPrimary
@@ -69,9 +74,8 @@ fun LoginScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedTextField(
                     value = usuario,
@@ -85,6 +89,24 @@ fun LoginScreen(
                     label = { Text("Contraseña") },
                     modifier = Modifier.fillMaxWidth()
                 )
+                OutlinedTextField(
+                    value = cuentaNombre,
+                    onValueChange = { cuentaNombre = it },
+                    label = { Text("Nombre de cuenta") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = cuentaTipo,
+                    onValueChange = { cuentaTipo = it },
+                    label = { Text("Tipo (EFECTIVO/BANCO/BILLETERA)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = cuentaSaldo,
+                    onValueChange = { cuentaSaldo = it },
+                    label = { Text("Saldo inicial") },
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 loginError?.let { error ->
                     Text(
@@ -95,22 +117,32 @@ fun LoginScreen(
                 }
 
                 Button(
-                    onClick = { viewModel.login(usuario.trim(), password.trim()) },
-                    enabled = usuario.isNotBlank() && password.isNotBlank(),
+                    onClick = {
+                        val saldo = cuentaSaldo.replace(",", ".").toDoubleOrNull()
+                        viewModel.loginWithAccount(
+                            username = usuario.trim(),
+                            password = password.trim(),
+                            accountName = cuentaNombre,
+                            accountType = cuentaTipo,
+                            accountSaldo = saldo
+                        )
+                    },
+                    enabled = usuario.isNotBlank() && password.isNotBlank() && cuentaNombre.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF22C55E),
                         contentColor = Color.Black
-                    )
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(text = "Ingresar")
+                    Text(text = "Crear e ingresar")
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        TextButton(onClick = onCreateAccount) {
-            Text(text = "Crear cuenta", color = textSecondary)
+        TextButton(onClick = onBack) {
+            Text(text = "Volver", color = textSecondary)
         }
     }
 }
