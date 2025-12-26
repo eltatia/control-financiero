@@ -313,6 +313,7 @@ fun HomeScreen(
     val recordatoriosProximos by viewModel.recordatoriosProximos.collectAsState()
     val nombreUsuario by viewModel.nombreUsuario.collectAsState()
     val cuentaActual by viewModel.cuentaActual.collectAsState()
+    val cuentaActualId by viewModel.cuentaActualId.collectAsState()
 
     // Cargar datos del mes actual al entrar a Home
     LaunchedEffect(Unit) {
