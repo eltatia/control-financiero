@@ -3,6 +3,8 @@ package com.gabriel.controlfinanciero.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
@@ -42,6 +43,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.res.painterResource
+import com.gabriel.controlfinanciero.R
+import com.gabriel.controlfinanciero.ui.components.FinanceBackground
 import com.gabriel.controlfinanciero.ui.components.PrimaryActionButton
 import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
 
@@ -58,127 +62,130 @@ fun CreateAccountScreen(
     var showPassword by remember { mutableStateOf(false) }
     val colorScheme = MaterialTheme.colorScheme
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colorScheme.background)
-            .padding(horizontal = 20.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Card(
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = colorScheme.primaryContainer)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.AccountBalance,
-                    contentDescription = null,
-                    tint = colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(12.dp)
-                )
-            }
-            Spacer(modifier = Modifier.size(12.dp))
-            Column {
-                Text(
-                    text = "Crear usuario",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colorScheme.onBackground
-                )
-                Text(
-                    text = "Empieza con una cuenta segura",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Card(
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
-            modifier = Modifier.fillMaxWidth()
+    Box(modifier = Modifier.fillMaxSize()) {
+        FinanceBackground()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedTextField(
-                    value = usuario,
-                    onValueChange = { usuario = it },
-                    label = { Text("Usuario") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Filled.Person,
-                            contentDescription = null
-                        )
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text("Contraseña") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Filled.Lock,
-                            contentDescription = null
-                        )
-                    },
-                    trailingIcon = {
-                        IconButton(onClick = { showPassword = !showPassword }) {
-                            Icon(
-                                imageVector = if (showPassword) {
-                                    Icons.Filled.VisibilityOff
-                                } else {
-                                    Icons.Filled.Visibility
-                                },
-                                contentDescription = null
-                            )
-                        }
-                    },
-                    visualTransformation = if (showPassword) {
-                        VisualTransformation.None
-                    } else {
-                        PasswordVisualTransformation()
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                AnimatedVisibility(visible = createAccountError != null) {
-                    Text(
-                        text = createAccountError.orEmpty(),
-                        color = colorScheme.error,
-                        fontSize = 12.sp
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = colorScheme.primaryContainer)
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.app_logo),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .padding(6.dp)
                     )
                 }
+                Spacer(modifier = Modifier.size(12.dp))
+                Column {
+                    Text(
+                        text = "Crear usuario",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colorScheme.onBackground
+                    )
+                    Text(
+                        text = "Empieza con una cuenta segura",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
-                PrimaryActionButton(
-                    text = "Crear usuario",
-                    onClick = {
-                        viewModel.crearUsuario(
-                            username = usuario.trim(),
-                            password = password.trim()
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Card(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = usuario,
+                        onValueChange = { usuario = it },
+                        label = { Text("Usuario") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Person,
+                                contentDescription = null
+                            )
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Contraseña") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Lock,
+                                contentDescription = null
+                            )
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { showPassword = !showPassword }) {
+                                Icon(
+                                    imageVector = if (showPassword) {
+                                        Icons.Filled.VisibilityOff
+                                    } else {
+                                        Icons.Filled.Visibility
+                                    },
+                                    contentDescription = null
+                                )
+                            }
+                        },
+                        visualTransformation = if (showPassword) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    AnimatedVisibility(visible = createAccountError != null) {
+                        Text(
+                            text = createAccountError.orEmpty(),
+                            color = colorScheme.error,
+                            fontSize = 12.sp
                         )
-                    },
-                    enabled = usuario.isNotBlank() && password.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth()
+                    }
+
+                    PrimaryActionButton(
+                        text = "Crear usuario",
+                        onClick = {
+                            viewModel.crearUsuario(
+                                username = usuario.trim(),
+                                password = password.trim()
+                            )
+                        },
+                        enabled = usuario.isNotBlank() && password.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            TextButton(onClick = onBack) {
+                Text(
+                    text = "Volver al login",
+                    color = colorScheme.primary,
+                    fontWeight = FontWeight.Medium
                 )
             }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        TextButton(onClick = onBack) {
-            Text(
-                text = "Volver al login",
-                color = colorScheme.primary,
-                fontWeight = FontWeight.Medium
-            )
         }
     }
 }

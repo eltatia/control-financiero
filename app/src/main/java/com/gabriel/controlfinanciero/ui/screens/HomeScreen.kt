@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gabriel.controlfinanciero.ui.components.FinanceBackground
 import com.gabriel.controlfinanciero.ui.components.PrimaryActionButton
 import com.gabriel.controlfinanciero.ui.components.SecondaryActionButton
 import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
@@ -431,6 +432,7 @@ fun HomeScreen(
             .fillMaxSize()
             .background(bgColor)
     ) {
+        FinanceBackground(showIllustration = true)
         Column(
             modifier = Modifier
                 .fillMaxSize()

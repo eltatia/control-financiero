@@ -142,9 +142,9 @@ class FinanceRepository private constructor(
             db.recordatorioDao().obtenerRecordatoriosRango(desde, hasta, accountId)
         }
 
-    suspend fun crearRecordatorio(recordatorio: RecordatorioEntity) {
-        if (recordatorio.accountId <= 0) return
-        db.recordatorioDao().insertar(recordatorio)
+    suspend fun crearRecordatorio(recordatorio: RecordatorioEntity): Long {
+        if (recordatorio.accountId <= 0) return 0
+        return db.recordatorioDao().insertar(recordatorio)
     }
 
     suspend fun actualizarRecordatorio(recordatorio: RecordatorioEntity) {
