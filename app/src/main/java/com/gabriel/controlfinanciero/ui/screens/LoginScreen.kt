@@ -40,6 +40,10 @@ fun LoginScreen(
 
     var usuario by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var mostrarCuenta by remember { mutableStateOf(false) }
+    var cuentaNombre by remember { mutableStateOf("") }
+    var cuentaTipo by remember { mutableStateOf("EFECTIVO") }
+    var cuentaSaldo by remember { mutableStateOf("") }
 
     val bgColor = if (isDarkMode) Color(0xFF021712) else Color(0xFFF3F6FF)
     val cardColor = if (isDarkMode) Color(0xFF071E1A) else Color.White
@@ -85,6 +89,43 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                Text(
+                    text = "¿Quieres crear una cuenta al ingresar?",
+                    color = textSecondary,
+                    fontSize = 12.sp
+                )
+
+                Button(
+                    onClick = { mostrarCuenta = !mostrarCuenta },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (mostrarCuenta) Color(0xFF22C55E) else cardColor,
+                        contentColor = if (mostrarCuenta) Color.Black else textPrimary
+                    )
+                ) {
+                    Text(text = if (mostrarCuenta) "Crear cuenta: Sí" else "Crear cuenta: No")
+                }
+
+                if (mostrarCuenta) {
+                    OutlinedTextField(
+                        value = cuentaNombre,
+                        onValueChange = { cuentaNombre = it },
+                        label = { Text("Nombre de cuenta") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = cuentaTipo,
+                        onValueChange = { cuentaTipo = it },
+                        label = { Text("Tipo (EFECTIVO/BANCO/BILLETERA)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = cuentaSaldo,
+                        onValueChange = { cuentaSaldo = it },
+                        label = { Text("Saldo inicial") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
                 loginError?.let { error ->
                     Text(
                         text = error,
@@ -94,7 +135,20 @@ fun LoginScreen(
                 }
 
                 Button(
-                    onClick = { viewModel.login(usuario.trim(), password.trim()) },
+                    onClick = {
+                        if (mostrarCuenta) {
+                            val saldo = cuentaSaldo.replace(",", ".").toDoubleOrNull()
+                            viewModel.loginWithAccount(
+                                username = usuario.trim(),
+                                password = password.trim(),
+                                accountName = cuentaNombre,
+                                accountType = cuentaTipo,
+                                accountSaldo = saldo
+                            )
+                        } else {
+                            viewModel.login(usuario.trim(), password.trim())
+                        }
+                    },
                     enabled = usuario.isNotBlank() && password.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF22C55E),
@@ -111,6 +165,11 @@ fun LoginScreen(
 
         Text(
             text = "Si el usuario no existe, se creará automáticamente.",
+            color = textSecondary,
+            fontSize = 12.sp
+        )
+        Text(
+            text = "Puedes crear una cuenta desde este formulario.",
             color = textSecondary,
             fontSize = 12.sp
         )

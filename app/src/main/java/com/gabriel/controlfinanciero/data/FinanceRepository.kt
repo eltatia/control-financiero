@@ -29,15 +29,15 @@ class FinanceRepository private constructor(
         tipo: String,
         saldoInicial: Double,
         userId: Int
-    ) {
-            val cuenta = CuentaEntity(
-                nombre = nombre,
-                tipo = tipo,
-                saldoInicial = saldoInicial,
-                userId = userId
-            )
-            db.cuentaDao().insertar(cuenta)
-        }
+    ): Long {
+        val cuenta = CuentaEntity(
+            nombre = nombre,
+            tipo = tipo,
+            saldoInicial = saldoInicial,
+            userId = userId
+        )
+        return db.cuentaDao().insertar(cuenta)
+    }
 
     suspend fun actualizarCuenta(cuenta: CuentaEntity) {
         db.cuentaDao().actualizar(cuenta)

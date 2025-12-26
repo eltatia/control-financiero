@@ -741,6 +741,46 @@ class FinanceViewModel(
         }
     }
 
+    fun loginWithAccount(
+        username: String,
+        password: String,
+        accountName: String?,
+        accountType: String?,
+        accountSaldo: Double?
+    ) {
+        viewModelScope.launch {
+            if (username.isBlank() || password.isBlank()) {
+                _loginError.value = "Completa usuario y contraseña."
+                return@launch
+            }
+
+            val existingUser = repository.obtenerUsuarioPorNombre(username)
+            val userId = if (existingUser == null) {
+                repository.crearUsuario(username, password)
+            } else if (existingUser.password == password) {
+                existingUser.id
+            } else {
+                _loginError.value = "Usuario o contraseña incorrectos."
+                return@launch
+            }
+
+            repository.setUserId(userId)
+            repository.setUserName(username)
+            repository.setLoggedIn(true)
+            _loginError.value = null
+
+            if (!accountName.isNullOrBlank()) {
+                val cuentaId = repository.crearCuenta(
+                    nombre = accountName.trim(),
+                    tipo = accountType?.ifBlank { "EFECTIVO" } ?: "EFECTIVO",
+                    saldoInicial = accountSaldo ?: 0.0,
+                    userId = userId
+                )
+                repository.setAccountId(cuentaId.toInt())
+            }
+        }
+    }
+
     fun logout() {
         viewModelScope.launch {
             repository.setLoggedIn(false)
