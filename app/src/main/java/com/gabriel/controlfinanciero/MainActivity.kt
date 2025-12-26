@@ -67,6 +67,7 @@ fun ControlFinancieroApp() {
 private fun RequestNotificationPermission() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
 
+    val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = {}
@@ -75,7 +76,7 @@ private fun RequestNotificationPermission() {
     LaunchedEffect(Unit) {
         val permission = android.Manifest.permission.POST_NOTIFICATIONS
         val isGranted = ContextCompat.checkSelfPermission(
-            LocalContext.current,
+            context,
             permission
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         if (!isGranted) {
