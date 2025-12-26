@@ -74,6 +74,7 @@ fun ReportesScreen(
 
     val transacciones by viewModel.todasTransacciones.collectAsState()
     val cuentas by viewModel.cuentas.collectAsState()
+    val cuentaActualId by viewModel.cuentaActualId.collectAsState()
 
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Mes actual", "Mes anterior", "Año actual", "Personalizado")
@@ -101,7 +102,13 @@ fun ReportesScreen(
         }
     }
 
-    val cuentaIds = remember(cuentas) { cuentas.map { it.id }.toSet() }
+    val cuentaIds = remember(cuentas, cuentaActualId) {
+        if (cuentaActualId != 0) {
+            setOf(cuentaActualId)
+        } else {
+            cuentas.map { it.id }.toSet()
+        }
+    }
     val transaccionesRango = remember(transacciones, selectedRange, cuentaIds) {
         transacciones.filter { transaccion ->
             val fecha = Instant.ofEpochMilli(transaccion.fecha).atZone(zoneId).toLocalDate()

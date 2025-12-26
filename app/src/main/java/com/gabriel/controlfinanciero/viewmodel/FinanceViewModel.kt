@@ -151,9 +151,13 @@ class FinanceViewModel(
         combine(
             repository.obtenerTransaccionesRango(desde, hasta),
             repository.obtenerRecordatoriosRango(desde, hasta),
-            deudas
-        ) { transacciones, recordatorios, deudasLista ->
-            CalendarRangeData(transacciones, recordatorios, deudasLista)
+            deudas,
+            cuentas,
+            cuentaActualId
+        ) { transacciones, recordatorios, deudasLista, cuentasLista, cuentaId ->
+            val cuentaIds = resolveCuentaIds(cuentasLista, cuentaId)
+            val transaccionesFiltradas = transacciones.filter { it.cuentaId in cuentaIds }
+            CalendarRangeData(transaccionesFiltradas, recordatorios, deudasLista)
         }
     }
 
@@ -364,9 +368,10 @@ class FinanceViewModel(
         viewModelScope.launch {
             combine(
                 repository.obtenerTransaccionesRango(desde, hasta),
-                cuentas
-            ) { lista, cuentasLista ->
-                val cuentaIds = cuentasLista.map { it.id }.toSet()
+                cuentas,
+                cuentaActualId
+            ) { lista, cuentasLista, cuentaId ->
+                val cuentaIds = resolveCuentaIds(cuentasLista, cuentaId)
                 val filtradas = lista.filter { it.cuentaId in cuentaIds }
                 filtradas
             }.collect { lista ->
@@ -643,9 +648,10 @@ class FinanceViewModel(
         viewModelScope.launch {
             combine(
                 repository.obtenerTransaccionesRango(desde, hasta),
-                cuentas
-            ) { lista, cuentasLista ->
-                val cuentaIds = cuentasLista.map { it.id }.toSet()
+                cuentas,
+                cuentaActualId
+            ) { lista, cuentasLista, cuentaId ->
+                val cuentaIds = resolveCuentaIds(cuentasLista, cuentaId)
                 val filtradas = lista.filter { it.cuentaId in cuentaIds }
                 val ingresos = filtradas.filter { it.tipo == "INGRESO" }.sumOf { it.monto }
                 val ingresosIniciales = cuentasLista
@@ -659,6 +665,17 @@ class FinanceViewModel(
                 _totalEgresosAnual.value = egresos
                 _balanceAnual.value = ingresosTotales - egresos
             }
+        }
+    }
+
+    private fun resolveCuentaIds(
+        cuentasLista: List<CuentaEntity>,
+        cuentaId: Int
+    ): Set<Int> {
+        return if (cuentaId != 0) {
+            setOf(cuentaId)
+        } else {
+            cuentasLista.map { it.id }.toSet()
         }
     }
 
