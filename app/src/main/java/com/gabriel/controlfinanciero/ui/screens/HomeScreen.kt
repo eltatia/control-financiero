@@ -307,6 +307,7 @@ fun HomeScreen(
     val totalEgresos by viewModel.totalEgresosMes.collectAsState()
     val balance by viewModel.balanceMes.collectAsState()
     val transaccionesMes by viewModel.transaccionesMes.collectAsState()
+    val saldoActualCuentas by viewModel.saldoActualCuentas.collectAsState()
     val cuentas by viewModel.cuentas.collectAsState()
     val todasTransacciones by viewModel.todasTransacciones.collectAsState()
     val recordatoriosProximos by viewModel.recordatoriosProximos.collectAsState()
@@ -551,6 +552,22 @@ fun HomeScreen(
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,
                         color = textPrimary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val saldoCuentaSeleccionada = if (cuentaActualId == 0) {
+                        saldoActualCuentas
+                    } else {
+                        saldoCuentaActual ?: 0.0
+                    }
+                    Text(
+                        text = "Saldo cuenta: S/ ${"%,.2f".format(saldoCuentaSeleccionada)}",
+                        color = textSecondary,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        text = "Saldo total: S/ ${"%,.2f".format(saldoActualCuentas)}",
+                        color = textSecondary,
+                        fontSize = 12.sp
                     )
                 }
             }
