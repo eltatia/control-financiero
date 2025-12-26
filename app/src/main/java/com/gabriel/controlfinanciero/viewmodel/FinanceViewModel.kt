@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.gabriel.controlfinanciero.data.FinanceRepository
+import com.gabriel.controlfinanciero.data.hashPassword
 import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
 import com.gabriel.controlfinanciero.data.local.entities.DeudaEntity
 import com.gabriel.controlfinanciero.data.local.entities.RecordatorioEntity
@@ -148,6 +149,9 @@ class FinanceViewModel(
     private val _loginError = MutableStateFlow<String?>(null)
     val loginError: StateFlow<String?> = _loginError.asStateFlow()
 
+    private val _createAccountError = MutableStateFlow<String?>(null)
+    val createAccountError: StateFlow<String?> = _createAccountError.asStateFlow()
+
     private val rangeDataFlow = visibleRange.flatMapLatest { (desde, hasta) ->
         combine(
             repository.obtenerTransaccionesRango(desde, hasta),
@@ -197,9 +201,15 @@ class FinanceViewModel(
                 }
         }
 
-        // Todas las transacciones
         viewModelScope.launch {
-            repository.obtenerTodasTransacciones().collect { lista ->
+            cuentas.flatMapLatest { cuentasLista ->
+                val cuentaIds = cuentasLista.map { it.id }
+                if (cuentaIds.isEmpty()) {
+                    flowOf(emptyList())
+                } else {
+                    repository.obtenerTransaccionesPorCuentas(cuentaIds)
+                }
+            }.collect { lista ->
                 _todasTransacciones.value = lista
             }
         }
@@ -781,6 +791,8 @@ class FinanceViewModel(
                 _loginError.value = "No existe una cuenta para este usuario. Crea una cuenta."
                 repository.setLoggedIn(false)
             } else if (existingUser.password == password) {
+                val hashedPassword = hashPassword(username, password)
+                repository.actualizarUsuario(existingUser.copy(password = hashedPassword))
                 repository.setUserId(existingUser.id)
                 repository.setUserName(existingUser.username)
                 val cuenta = repository.obtenerPrimeraCuentaPorUsuario(existingUser.id)
@@ -799,6 +811,23 @@ class FinanceViewModel(
                     repository.setLoggedIn(true)
                     _loginError.value = null
                 }
+            } else if (existingUser.password == hashPassword(username, password)) {
+                repository.setUserId(existingUser.id)
+                repository.setUserName(existingUser.username)
+                val cuenta = repository.obtenerPrimeraCuentaPorUsuario(existingUser.id)
+                if (cuenta == null) {
+                    val nuevaCuentaId = repository.crearCuenta(
+                        nombre = "Cuenta principal",
+                        tipo = "EFECTIVO",
+                        saldoInicial = 0.0,
+                        userId = existingUser.id
+                    )
+                    repository.setAccountId(nuevaCuentaId.toInt())
+                } else {
+                    repository.setAccountId(cuenta.id)
+                }
+                repository.setLoggedIn(true)
+                _loginError.value = null
             } else {
                 _loginError.value = "Usuario o contraseña incorrectos."
             }
@@ -808,20 +837,22 @@ class FinanceViewModel(
     fun crearUsuario(username: String, password: String) {
         viewModelScope.launch {
             if (username.isBlank()) {
-                _loginError.value = "El usuario es obligatorio."
+                _createAccountError.value = "El usuario es obligatorio."
                 return@launch
             }
             if (password.isBlank()) {
-                _loginError.value = "La contraseña es obligatoria."
+                _createAccountError.value = "La contraseña es obligatoria."
                 return@launch
             }
 
             val existingUser = repository.obtenerUsuarioPorNombre(username)
             if (existingUser != null) {
-                repository.resetUserData(username)
+                _createAccountError.value = "El usuario ya existe. Inicia sesión."
+                return@launch
             }
 
-            val userId = repository.crearUsuario(username, password)
+            val hashedPassword = hashPassword(username, password)
+            val userId = repository.crearUsuario(username, hashedPassword)
             repository.setUserId(userId)
             repository.setUserName(username)
             val cuentaId = repository.crearCuenta(
@@ -831,8 +862,8 @@ class FinanceViewModel(
                 userId = userId
             )
             repository.setAccountId(cuentaId.toInt())
-            repository.setLoggedIn(false)
-            _loginError.value = null
+            repository.setLoggedIn(true)
+            _createAccountError.value = null
         }
     }
 

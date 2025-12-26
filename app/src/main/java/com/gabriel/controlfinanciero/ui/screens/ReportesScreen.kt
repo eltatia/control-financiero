@@ -2,6 +2,8 @@ package com.gabriel.controlfinanciero.ui.screens
 
 import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -21,6 +23,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,6 +79,8 @@ fun ReportesScreen(
     val textMutedColor = if (isDarkMode) TextMuted else Color.Gray
     val textPrimary = if (isDarkMode) Color.White else Color.Black
     val context = LocalContext.current
+    var exportMenuExpanded by remember { mutableStateOf(false) }
+    var pendingCsv by remember { mutableStateOf("") }
 
     val transacciones by viewModel.todasTransacciones.collectAsState()
     val cuentas by viewModel.cuentas.collectAsState()
@@ -186,6 +192,24 @@ fun ReportesScreen(
         )
     }
     val formatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
+    val csvContent = remember(transaccionesRango, cuentas, formatter) {
+        buildCsvContent(transaccionesRango, cuentas, zoneId, formatter)
+    }
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val writeResult = runCatching {
+            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                outputStream.write(pendingCsv.toByteArray())
+            }
+        }
+        if (writeResult.isFailure) {
+            Toast.makeText(context, "No se pudo guardar el archivo.", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Archivo guardado.", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -540,65 +564,67 @@ fun ReportesScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                Button(
-                    onClick = {
-                        if (transaccionesRango.isEmpty()) {
-                            Toast.makeText(
-                                context,
-                                "No hay transacciones para exportar.",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            return@Button
-                        }
-
-                        val cuentasPorId = cuentas.associateBy { it.id }
-                        val csv = buildString {
-                            append("Fecha,Título,Categoría,Tipo,Cuenta,Monto,Nota\n")
-                            transaccionesRango.sortedBy { it.fecha }.forEach { transaccion ->
-                                val fecha = Instant.ofEpochMilli(transaccion.fecha)
-                                    .atZone(zoneId)
-                                    .toLocalDate()
-                                    .format(formatter)
-                                val cuentaNombre = cuentasPorId[transaccion.cuentaId]?.nombre
-                                    ?: "Cuenta ${transaccion.cuentaId}"
-                                val nota = transaccion.nota ?: ""
-                                append(
-                                    listOf(
-                                        fecha,
-                                        transaccion.titulo,
-                                        transaccion.categoria,
-                                        transaccion.tipo,
-                                        cuentaNombre,
-                                        "%.2f".format(transaccion.monto),
-                                        nota
-                                    ).joinToString(",") { value -> csvEscape(value) }
-                                )
-                                append("\n")
-                            }
-                        }
-
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/csv"
-                            putExtra(Intent.EXTRA_SUBJECT, "Reporte de transacciones")
-                            putExtra(Intent.EXTRA_TEXT, csv)
-                        }
-                        context.startActivity(
-                            Intent.createChooser(shareIntent, "Exportar reporte")
+                Box {
+                    Button(
+                        onClick = { exportMenuExpanded = true },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentGreen,
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(30.dp),
+                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.IosShare,
+                            contentDescription = "Exportar"
                         )
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentGreen,
-                        contentColor = Color.Black
-                    ),
-                    shape = RoundedCornerShape(30.dp),
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.IosShare,
-                        contentDescription = "Exportar"
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Exportar")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Exportar")
+                    }
+
+                    DropdownMenu(
+                        expanded = exportMenuExpanded,
+                        onDismissRequest = { exportMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Compartir") },
+                            onClick = {
+                                exportMenuExpanded = false
+                                if (transaccionesRango.isEmpty()) {
+                                    Toast.makeText(
+                                        context,
+                                        "No hay transacciones para exportar.",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    return@DropdownMenuItem
+                                }
+                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/csv"
+                                    putExtra(Intent.EXTRA_SUBJECT, "Reporte de transacciones")
+                                    putExtra(Intent.EXTRA_TEXT, csvContent)
+                                }
+                                context.startActivity(
+                                    Intent.createChooser(shareIntent, "Exportar reporte")
+                                )
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Guardar") },
+                            onClick = {
+                                exportMenuExpanded = false
+                                if (transaccionesRango.isEmpty()) {
+                                    Toast.makeText(
+                                        context,
+                                        "No hay transacciones para exportar.",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    return@DropdownMenuItem
+                                }
+                                pendingCsv = csvContent
+                                createDocumentLauncher.launch("reporte-transacciones.csv")
+                            }
+                        )
+                    }
                 }
             }
 
@@ -676,6 +702,39 @@ private fun csvEscape(value: String): String {
         "\"$escaped\""
     } else {
         escaped
+    }
+}
+
+private fun buildCsvContent(
+    transacciones: List<com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity>,
+    cuentas: List<com.gabriel.controlfinanciero.data.local.entities.CuentaEntity>,
+    zoneId: ZoneId,
+    formatter: DateTimeFormatter
+): String {
+    val cuentasPorId = cuentas.associateBy { it.id }
+    return buildString {
+        append("Fecha,Título,Categoría,Tipo,Cuenta,Monto,Nota\n")
+        transacciones.sortedBy { it.fecha }.forEach { transaccion ->
+            val fecha = Instant.ofEpochMilli(transaccion.fecha)
+                .atZone(zoneId)
+                .toLocalDate()
+                .format(formatter)
+            val cuentaNombre = cuentasPorId[transaccion.cuentaId]?.nombre
+                ?: "Cuenta ${transaccion.cuentaId}"
+            val nota = transaccion.nota ?: ""
+            append(
+                listOf(
+                    fecha,
+                    transaccion.titulo,
+                    transaccion.categoria,
+                    transaccion.tipo,
+                    cuentaNombre,
+                    "%.2f".format(transaccion.monto),
+                    nota
+                ).joinToString(",") { value -> csvEscape(value) }
+            )
+            append("\n")
+        }
     }
 }
 

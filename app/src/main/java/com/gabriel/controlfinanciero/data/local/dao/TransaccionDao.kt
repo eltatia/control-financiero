@@ -29,6 +29,9 @@ interface TransaccionDao {
     @Query("SELECT * FROM transacciones ORDER BY fecha DESC")
     fun obtenerTodas(): Flow<List<TransaccionEntity>>
 
+    @Query("SELECT * FROM transacciones WHERE cuentaId IN (:cuentaIds) ORDER BY fecha DESC")
+    fun obtenerPorCuentas(cuentaIds: List<Int>): Flow<List<TransaccionEntity>>
+
     @Query("""
         SELECT * FROM transacciones
         WHERE fecha BETWEEN :desde AND :hasta

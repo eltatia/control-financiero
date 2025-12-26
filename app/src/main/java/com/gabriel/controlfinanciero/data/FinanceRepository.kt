@@ -10,6 +10,7 @@ import com.gabriel.controlfinanciero.data.local.entities.RecordatorioEntity
 import com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity
 import com.gabriel.controlfinanciero.data.local.entities.UserEntity
 import kotlinx.coroutines.flow.Flow
+import java.security.MessageDigest
 
 class FinanceRepository private constructor(
     private val db: FinanceDatabase,
@@ -72,6 +73,9 @@ class FinanceRepository private constructor(
     // 🔹 Todas las transacciones (para saldo actual por cuenta)
     fun obtenerTodasTransacciones(): Flow<List<TransaccionEntity>> =
         db.transaccionDao().obtenerTodas()
+
+    fun obtenerTransaccionesPorCuentas(cuentaIds: List<Int>): Flow<List<TransaccionEntity>> =
+        db.transaccionDao().obtenerPorCuentas(cuentaIds)
 
     // ------------------- DEUDAS / PRÉSTAMOS -------------------
 
@@ -152,7 +156,7 @@ class FinanceRepository private constructor(
             db.transaccionDao().eliminarTodas()
             db.deudaDao().eliminarTodas()
             db.cuentaDao().eliminarTodas()
-            db.userDao().insertar(UserEntity(username = "Alex", password = "1234"))
+            db.userDao().insertar(UserEntity(username = "Alex", password = hashPassword("Alex", "1234")))
 
             val userId = db.userDao().obtenerPorUsername("Alex")?.id ?: 1
             val cuentasIds = db.cuentaDao().insertarLista(
@@ -264,6 +268,10 @@ class FinanceRepository private constructor(
         return db.userDao().insertar(usuario).toInt()
     }
 
+    suspend fun actualizarUsuario(usuario: UserEntity) {
+        db.userDao().actualizar(usuario)
+    }
+
     suspend fun resetUserData(username: String) {
         val user = db.userDao().obtenerPorUsername(username) ?: return
         val cuentas = db.cuentaDao().obtenerPorUsuarioSync(user.id)
@@ -274,4 +282,10 @@ class FinanceRepository private constructor(
         db.cuentaDao().eliminarPorUsuario(user.id)
         db.userDao().eliminarPorUsername(username)
     }
+}
+
+fun hashPassword(username: String, password: String): String {
+    val normalized = "$username:$password"
+    val digest = MessageDigest.getInstance("SHA-256").digest(normalized.toByteArray())
+    return digest.joinToString("") { byte -> "%02x".format(byte) }
 }
