@@ -24,6 +24,9 @@ class FinanceRepository private constructor(
     fun obtenerCuentasPorUsuario(userId: Int): Flow<List<CuentaEntity>> =
         db.cuentaDao().obtenerPorUsuario(userId)
 
+    suspend fun obtenerPrimeraCuentaPorUsuario(userId: Int): CuentaEntity? =
+        db.cuentaDao().obtenerPrimeraPorUsuario(userId)
+
     suspend fun crearCuenta(
         nombre: String,
         tipo: String,

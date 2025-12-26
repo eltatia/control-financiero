@@ -725,16 +725,20 @@ class FinanceViewModel(
 
             val existingUser = repository.obtenerUsuarioPorNombre(username)
             if (existingUser == null) {
-                val newUserId = repository.crearUsuario(username, password)
-                repository.setUserId(newUserId)
-                repository.setUserName(username)
-                repository.setLoggedIn(true)
-                _loginError.value = null
+                _loginError.value = "No existe una cuenta para este usuario. Crea una cuenta."
+                repository.setLoggedIn(false)
             } else if (existingUser.password == password) {
                 repository.setUserId(existingUser.id)
                 repository.setUserName(existingUser.username)
-                repository.setLoggedIn(true)
-                _loginError.value = null
+                val cuenta = repository.obtenerPrimeraCuentaPorUsuario(existingUser.id)
+                if (cuenta == null) {
+                    repository.setLoggedIn(false)
+                    _loginError.value = "Necesitas crear al menos una cuenta para ingresar."
+                } else {
+                    repository.setAccountId(cuenta.id)
+                    repository.setLoggedIn(true)
+                    _loginError.value = null
+                }
             } else {
                 _loginError.value = "Usuario o contraseña incorrectos."
             }
@@ -766,7 +770,6 @@ class FinanceViewModel(
 
             repository.setUserId(userId)
             repository.setUserName(username)
-            repository.setLoggedIn(true)
             _loginError.value = null
 
             if (!accountName.isNullOrBlank()) {
@@ -777,6 +780,16 @@ class FinanceViewModel(
                     userId = userId
                 )
                 repository.setAccountId(cuentaId.toInt())
+                repository.setLoggedIn(true)
+            } else {
+                val cuenta = repository.obtenerPrimeraCuentaPorUsuario(userId)
+                if (cuenta == null) {
+                    repository.setLoggedIn(false)
+                    _loginError.value = "Crea una cuenta para ingresar."
+                } else {
+                    repository.setAccountId(cuenta.id)
+                    repository.setLoggedIn(true)
+                }
             }
         }
     }
