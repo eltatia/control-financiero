@@ -1,5 +1,7 @@
 package com.gabriel.controlfinanciero.ui.screens
 
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -38,6 +40,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,6 +74,7 @@ fun ReportesScreen(
     val softCardColor = if (isDarkMode) CardDarkSoft else Color(0xFFE5E7EB)
     val textMutedColor = if (isDarkMode) TextMuted else Color.Gray
     val textPrimary = if (isDarkMode) Color.White else Color.Black
+    val context = LocalContext.current
 
     val transacciones by viewModel.todasTransacciones.collectAsState()
     val cuentas by viewModel.cuentas.collectAsState()
@@ -181,6 +185,7 @@ fun ReportesScreen(
             egresosSerie
         )
     }
+    val formatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
 
     Box(
         modifier = Modifier
@@ -536,7 +541,51 @@ fun ReportesScreen(
                 horizontalArrangement = Arrangement.End
             ) {
                 Button(
-                    onClick = { /* TODO exportar */ },
+                    onClick = {
+                        if (transaccionesRango.isEmpty()) {
+                            Toast.makeText(
+                                context,
+                                "No hay transacciones para exportar.",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            return@Button
+                        }
+
+                        val cuentasPorId = cuentas.associateBy { it.id }
+                        val csv = buildString {
+                            append("Fecha,Título,Categoría,Tipo,Cuenta,Monto,Nota\n")
+                            transaccionesRango.sortedBy { it.fecha }.forEach { transaccion ->
+                                val fecha = Instant.ofEpochMilli(transaccion.fecha)
+                                    .atZone(zoneId)
+                                    .toLocalDate()
+                                    .format(formatter)
+                                val cuentaNombre = cuentasPorId[transaccion.cuentaId]?.nombre
+                                    ?: "Cuenta ${transaccion.cuentaId}"
+                                val nota = transaccion.nota ?: ""
+                                append(
+                                    listOf(
+                                        fecha,
+                                        transaccion.titulo,
+                                        transaccion.categoria,
+                                        transaccion.tipo,
+                                        cuentaNombre,
+                                        "%.2f".format(transaccion.monto),
+                                        nota
+                                    ).joinToString(",") { value -> csvEscape(value) }
+                                )
+                                append("\n")
+                            }
+                        }
+
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/csv"
+                            putExtra(Intent.EXTRA_SUBJECT, "Reporte de transacciones")
+                            putExtra(Intent.EXTRA_TEXT, csv)
+                        }
+                        context.startActivity(
+                            Intent.createChooser(shareIntent, "Exportar reporte")
+                        )
+                    },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AccentGreen,
                         contentColor = Color.Black
@@ -618,6 +667,15 @@ private fun ResumenMiniCard(
                 fontSize = 12.sp
             )
         }
+    }
+}
+
+private fun csvEscape(value: String): String {
+    val escaped = value.replace("\"", "\"\"")
+    return if (escaped.contains(",") || escaped.contains("\n") || escaped.contains("\r")) {
+        "\"$escaped\""
+    } else {
+        escaped
     }
 }
 
