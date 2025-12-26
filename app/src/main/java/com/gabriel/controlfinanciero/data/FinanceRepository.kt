@@ -75,14 +75,15 @@ class FinanceRepository private constructor(
 
     // ------------------- DEUDAS / PRÉSTAMOS -------------------
 
-    fun obtenerDeudas(): Flow<List<DeudaEntity>> =
-        db.deudaDao().obtenerTodas()
+    fun obtenerDeudasPorCuenta(accountId: Int): Flow<List<DeudaEntity>> =
+        db.deudaDao().obtenerPorCuenta(accountId)
 
     suspend fun crearDeuda(
         nombre: String,
         montoTotal: Double,
         tipo: String,                // "DEUDA" o "PRESTAMO"
-        fechaVencimiento: Long? = null
+        fechaVencimiento: Long? = null,
+        accountId: Int
     ) {
         val ahora = System.currentTimeMillis()
         val deuda = DeudaEntity(
@@ -92,7 +93,8 @@ class FinanceRepository private constructor(
             fechaRegistro = ahora,
             fechaVencimiento = fechaVencimiento,
             tipo = tipo,
-            estado = "ACTIVA"
+            estado = "ACTIVA",
+            accountId = accountId
         )
         db.deudaDao().insertar(deuda)
     }
@@ -123,9 +125,10 @@ class FinanceRepository private constructor(
 
     fun obtenerRecordatoriosRango(
         desde: Long,
-        hasta: Long
+        hasta: Long,
+        accountId: Int
     ): Flow<List<RecordatorioEntity>> =
-        db.recordatorioDao().obtenerRecordatoriosRango(desde, hasta)
+        db.recordatorioDao().obtenerRecordatoriosRango(desde, hasta, accountId)
 
     suspend fun crearRecordatorio(recordatorio: RecordatorioEntity) {
         db.recordatorioDao().insertar(recordatorio)
@@ -202,12 +205,12 @@ class FinanceRepository private constructor(
                     DeudaEntity(
                         nombre = "Tarjeta crédito", montoTotal = 1200.0, montoPendiente = 850.0,
                         fechaRegistro = ahora - (20 * unDiaMillis), fechaVencimiento = ahora + (10 * unDiaMillis),
-                        tipo = "DEUDA", estado = "ACTIVA"
+                        tipo = "DEUDA", estado = "ACTIVA", accountId = cuentaBanco
                     ),
                     DeudaEntity(
                         nombre = "Préstamo familiar", montoTotal = 500.0, montoPendiente = 200.0,
                         fechaRegistro = ahora - (40 * unDiaMillis), fechaVencimiento = null,
-                        tipo = "PRESTAMO", estado = "ACTIVA"
+                        tipo = "PRESTAMO", estado = "ACTIVA", accountId = cuentaEfectivo
                     )
                 )
             )

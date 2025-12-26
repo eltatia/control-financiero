@@ -13,5 +13,6 @@ data class RecordatorioEntity(
     val monto: Double? = null,
     val nota: String? = null,
     val repeticion: String = "NONE", // "NONE", "WEEKLY", "MONTHLY"
-    val activo: Boolean = true
+    val activo: Boolean = true,
+    val accountId: Int
 )

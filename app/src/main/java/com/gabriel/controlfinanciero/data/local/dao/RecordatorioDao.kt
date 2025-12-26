@@ -17,12 +17,14 @@ interface RecordatorioDao {
         SELECT * FROM recordatorios
         WHERE fechaMillis BETWEEN :desde AND :hasta
         AND activo = 1
+        AND accountId = :accountId
         ORDER BY fechaMillis DESC
         """
     )
     fun obtenerRecordatoriosRango(
         desde: Long,
-        hasta: Long
+        hasta: Long,
+        accountId: Int
     ): Flow<List<RecordatorioEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

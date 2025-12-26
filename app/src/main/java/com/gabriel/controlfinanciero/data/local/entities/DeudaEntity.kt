@@ -13,5 +13,6 @@ data class DeudaEntity(
     val fechaRegistro: Long,            // millis
     val fechaVencimiento: Long?,        // nullable si no hay
     val tipo: String,                   // "DEUDA" o "PRESTAMO"
-    val estado: String                  // "ACTIVA" o "PAGADA"
+    val estado: String,                 // "ACTIVA" o "PAGADA"
+    val accountId: Int
 )

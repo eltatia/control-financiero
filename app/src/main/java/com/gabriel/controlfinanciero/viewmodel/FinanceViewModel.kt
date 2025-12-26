@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -150,14 +151,28 @@ class FinanceViewModel(
     private val rangeDataFlow = visibleRange.flatMapLatest { (desde, hasta) ->
         combine(
             repository.obtenerTransaccionesRango(desde, hasta),
-            repository.obtenerRecordatoriosRango(desde, hasta),
             deudas,
             cuentas,
             cuentaActualId
-        ) { transacciones, recordatorios, deudasLista, cuentasLista, cuentaId ->
+        ) { transacciones, deudasLista, cuentasLista, cuentaId ->
             val cuentaIds = resolveCuentaIds(cuentasLista, cuentaId)
             val transaccionesFiltradas = transacciones.filter { it.cuentaId in cuentaIds }
-            CalendarRangeData(transaccionesFiltradas, recordatorios, deudasLista)
+            CalendarRangeData(transaccionesFiltradas, emptyList(), deudasLista)
+        }.combine(cuentaActualId) { data, cuentaId ->
+            val accountId = cuentaId.takeIf { it != 0 }
+            CalendarRangeData(
+                data.transacciones,
+                emptyList(),
+                data.deudas
+            ) to accountId
+        }
+    }.flatMapLatest { (data, accountId) ->
+        val range = visibleRange.value
+        if (accountId == null) {
+            flowOf(data.copy(recordatorios = emptyList()))
+        } else {
+            repository.obtenerRecordatoriosRango(range.first, range.second, accountId)
+                .map { recordatorios -> data.copy(recordatorios = recordatorios) }
         }
     }
 
@@ -191,9 +206,13 @@ class FinanceViewModel(
 
         // Deudas / préstamos
         viewModelScope.launch {
-            repository.obtenerDeudas().collect { lista ->
-                _deudas.value = lista
-            }
+            cuentaActualId
+                .flatMapLatest { accountId ->
+                    if (accountId == 0) flowOf(emptyList()) else repository.obtenerDeudasPorCuenta(accountId)
+                }
+                .collect { lista ->
+                    _deudas.value = lista
+                }
         }
 
         viewModelScope.launch {
@@ -252,9 +271,13 @@ class FinanceViewModel(
             val zoneId = ZoneId.systemDefault()
             val desde = hoy.atStartOfDay(zoneId).toInstant().toEpochMilli()
             val hasta = hoy.plusDays(7).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
-            repository.obtenerRecordatoriosRango(desde, hasta).collect { lista ->
-                _recordatoriosProximos.value = lista
-            }
+            cuentaActualId
+                .flatMapLatest { accountId ->
+                    if (accountId == 0) flowOf(emptyList()) else repository.obtenerRecordatoriosRango(desde, hasta, accountId)
+                }
+                .collect { lista ->
+                    _recordatoriosProximos.value = lista
+                }
         }
 
         viewModelScope.launch {
@@ -311,12 +334,16 @@ class FinanceViewModel(
         fechaVencimiento: Long? = null
     ) {
         viewModelScope.launch {
-            repository.crearDeuda(
-                nombre = nombre,
-                montoTotal = montoTotal,
-                tipo = tipo,
-                fechaVencimiento = fechaVencimiento
-            )
+            val accountId = cuentaActualId.value
+            if (accountId != 0) {
+                repository.crearDeuda(
+                    nombre = nombre,
+                    montoTotal = montoTotal,
+                    tipo = tipo,
+                    fechaVencimiento = fechaVencimiento,
+                    accountId = accountId
+                )
+            }
         }
     }
 
@@ -429,12 +456,15 @@ class FinanceViewModel(
         val fechaMillis = fechaSeleccionada.atStartOfDay(zoneId).toInstant().toEpochMilli()
 
         viewModelScope.launch {
+            val accountId = cuentaActualId.value
+            if (accountId == 0) return@launch
             val recordatorio = RecordatorioEntity(
                 titulo = titulo,
                 fechaMillis = fechaMillis,
                 tipo = tipo,
                 monto = monto,
-                nota = nota
+                nota = nota,
+                accountId = accountId
             )
             repository.crearRecordatorio(recordatorio)
         }
@@ -455,6 +485,8 @@ class FinanceViewModel(
         val fechaMillis = fechaSeleccionada.atStartOfDay(zoneId).toInstant().toEpochMilli()
 
         viewModelScope.launch {
+            val accountId = cuentaActualId.value
+            if (accountId == 0) return@launch
             val recordatorio = RecordatorioEntity(
                 id = id,
                 titulo = titulo,
@@ -463,7 +495,8 @@ class FinanceViewModel(
                 monto = monto,
                 nota = nota,
                 repeticion = repeticion,
-                activo = activo
+                activo = activo,
+                accountId = accountId
             )
             repository.actualizarRecordatorio(recordatorio)
         }
@@ -471,6 +504,8 @@ class FinanceViewModel(
 
     fun eliminarRecordatorio(id: Int) {
         viewModelScope.launch {
+            val accountId = cuentaActualId.value
+            if (accountId == 0) return@launch
             val recordatorio = RecordatorioEntity(
                 id = id,
                 titulo = "",
@@ -479,7 +514,8 @@ class FinanceViewModel(
                 monto = null,
                 nota = null,
                 repeticion = "NONE",
-                activo = false
+                activo = false,
+                accountId = accountId
             )
             repository.eliminarRecordatorio(recordatorio)
         }

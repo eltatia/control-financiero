@@ -22,6 +22,9 @@ interface DeudaDao {
     @Query("SELECT * FROM deudas ORDER BY fechaRegistro DESC")
     fun obtenerTodas(): Flow<List<DeudaEntity>>
 
+    @Query("SELECT * FROM deudas WHERE accountId = :accountId ORDER BY fechaRegistro DESC")
+    fun obtenerPorCuenta(accountId: Int): Flow<List<DeudaEntity>>
+
     @Query("SELECT * FROM deudas WHERE estado = :estado ORDER BY fechaRegistro DESC")
     fun obtenerPorEstado(estado: String): Flow<List<DeudaEntity>>
 
