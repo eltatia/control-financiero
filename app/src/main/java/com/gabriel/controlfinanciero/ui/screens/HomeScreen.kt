@@ -31,6 +31,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.YearMonth
 
 // Colores modo oscuro para Home (parecidos a Reportes/Calendario)
 private val HomeDarkBackground = Color(0xFF021712)
@@ -326,6 +327,8 @@ fun HomeScreen(
     var cuentaIndex by remember { mutableStateOf(0) }
     var showSettingsSheet by remember { mutableStateOf(false) }
     var nombreUsuarioInput by remember { mutableStateOf("") }
+    var showAccountMenu by remember { mutableStateOf(false) }
+    var showGastosAll by remember { mutableStateOf(false) }
 
     val bgColor = if (isDarkMode) HomeDarkBackground else Color(0xFFF3F6FF)
     val cardColor = if (isDarkMode) HomeDarkCard else Color.White
@@ -345,17 +348,40 @@ fun HomeScreen(
             )
         }
 
-    val egresosPorCategoria = transaccionesMes
+    val cuentaIds = cuentas.map { it.id }.toSet()
+    val ahora = YearMonth.now()
+    val zoneId = ZoneId.systemDefault()
+    val monthStart = ahora.atDay(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+    val monthEnd = ahora.atEndOfMonth().plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
+
+    val transaccionesMesTodas = todasTransacciones.filter { transaccion ->
+        transaccion.fecha in monthStart..monthEnd && transaccion.cuentaId in cuentaIds
+    }
+
+    val egresosPorCategoriaCuenta = transaccionesMes
         .filter { it.tipo == "EGRESO" }
         .groupBy { it.categoria.ifBlank { "Otros" } }
         .mapValues { (_, items) -> items.sumOf { it.monto } }
         .toList()
         .sortedByDescending { it.second }
 
-    val topCategorias = egresosPorCategoria.take(4).toMutableList()
-    val restantes = egresosPorCategoria.drop(4).sumOf { it.second }
-    if (restantes > 0.0) {
-        topCategorias.add("Otros" to restantes)
+    val egresosPorCategoriaTodas = transaccionesMesTodas
+        .filter { it.tipo == "EGRESO" }
+        .groupBy { it.categoria.ifBlank { "Otros" } }
+        .mapValues { (_, items) -> items.sumOf { it.monto } }
+        .toList()
+        .sortedByDescending { it.second }
+
+    val topCategoriasCuenta = egresosPorCategoriaCuenta.take(4).toMutableList()
+    val restantesCuenta = egresosPorCategoriaCuenta.drop(4).sumOf { it.second }
+    if (restantesCuenta > 0.0) {
+        topCategoriasCuenta.add("Otros" to restantesCuenta)
+    }
+
+    val topCategoriasTodas = egresosPorCategoriaTodas.take(4).toMutableList()
+    val restantesTodas = egresosPorCategoriaTodas.drop(4).sumOf { it.second }
+    if (restantesTodas > 0.0) {
+        topCategoriasTodas.add("Otros" to restantesTodas)
     }
 
     val donutColors = listOf(
@@ -366,8 +392,14 @@ fun HomeScreen(
         Color(0xFF10B981)
     )
 
-    val donutValues = if (topCategorias.isNotEmpty()) {
-        topCategorias.map { it.second.toFloat() }
+    val donutValuesCuenta = if (topCategoriasCuenta.isNotEmpty()) {
+        topCategoriasCuenta.map { it.second.toFloat() }
+    } else {
+        listOf(0f)
+    }
+
+    val donutValuesTodas = if (topCategoriasTodas.isNotEmpty()) {
+        topCategoriasTodas.map { it.second.toFloat() }
     } else {
         listOf(0f)
     }
@@ -475,6 +507,44 @@ fun HomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text("Balance General", color = textSecondary)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Cuenta:",
+                            color = textSecondary,
+                            fontSize = 12.sp
+                        )
+                        TextButton(onClick = { showAccountMenu = true }) {
+                            Text(
+                                text = cuentaActual?.nombre ?: "Todas",
+                                color = HomeAccentGreen,
+                                fontSize = 12.sp
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showAccountMenu,
+                            onDismissRequest = { showAccountMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Todas") },
+                                onClick = {
+                                    showAccountMenu = false
+                                    viewModel.setCuentaActual(0)
+                                }
+                            )
+                            cuentas.forEach { cuenta ->
+                                DropdownMenuItem(
+                                    text = { Text(cuenta.nombre) },
+                                    onClick = {
+                                        showAccountMenu = false
+                                        viewModel.setCuentaActual(cuenta.id)
+                                    }
+                                )
+                            }
+                        }
+                    }
                     Text(
                         // 👉 Balance real del mes
                         "S/ ${"%,.2f".format(balance)}",
@@ -492,6 +562,8 @@ fun HomeScreen(
                 Button(
                     onClick = {
                         esIngreso = true
+                        cuentaIndex = cuentas.indexOfFirst { it.id == (cuentaActual?.id ?: 0) }
+                            .takeIf { it >= 0 } ?: 0
                         showMovimientoDialog = true
                     },
                     colors = ButtonDefaults.buttonColors(HomeAccentGreen),
@@ -504,6 +576,8 @@ fun HomeScreen(
                 Button(
                     onClick = {
                         esIngreso = false
+                        cuentaIndex = cuentas.indexOfFirst { it.id == (cuentaActual?.id ?: 0) }
+                            .takeIf { it >= 0 } ?: 0
                         showMovimientoDialog = true
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -536,6 +610,22 @@ fun HomeScreen(
                             fontSize = 18.sp,
                             color = textPrimary
                         )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(onClick = { showGastosAll = false }) {
+                                Text(
+                                    text = "Cuenta",
+                                    color = if (!showGastosAll) HomeAccentGreen else textSecondary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            TextButton(onClick = { showGastosAll = true }) {
+                                Text(
+                                    text = "Todas",
+                                    color = if (showGastosAll) HomeAccentGreen else textSecondary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
                         TextButton(onClick = { }) {
                             Text(
                                 "Ver todo",
@@ -559,7 +649,7 @@ fun HomeScreen(
                         ) {
                             DonutChartPremium(
                                 // De momento valores de ejemplo; centro usa totalEgresos real
-                                values = donutValues,
+                                values = if (showGastosAll) donutValuesTodas else donutValuesCuenta,
                                 colors = donutColors,
                                 modifier = Modifier.size(140.dp),
                                 innerColor = if (isDarkMode) cardColor else Color.White
@@ -569,7 +659,7 @@ fun HomeScreen(
                                 Text("Total gastado", color = textSecondary, fontSize = 12.sp)
                                 Text(
                                     // 👉 Total de Egresos del mes
-                                    "S/ ${"%,.2f".format(totalEgresos)}",
+                                    "S/ ${"%,.2f".format(if (showGastosAll) transaccionesMesTodas.filter { it.tipo == "EGRESO" }.sumOf { it.monto } else totalEgresos)}",
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = textPrimary
@@ -584,14 +674,15 @@ fun HomeScreen(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            if (topCategorias.isEmpty()) {
+                            val categorias = if (showGastosAll) topCategoriasTodas else topCategoriasCuenta
+                            if (categorias.isEmpty()) {
                                 Text(
                                     text = "Sin egresos este mes.",
                                     color = textSecondary,
                                     fontSize = 13.sp
                                 )
                             } else {
-                                topCategorias.forEachIndexed { index, (label, amount) ->
+                                categorias.forEachIndexed { index, (label, amount) ->
                                     LegendRow(
                                         label = label,
                                         amount = "S/ ${"%,.2f".format(amount)}",
