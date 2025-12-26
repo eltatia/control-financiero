@@ -1,10 +1,6 @@
 package com.gabriel.controlfinanciero.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
@@ -20,10 +16,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
 
 @Composable
-fun AppNavigation(navController: NavHostController) {
-
-    // 🔥 Estado GLOBAL del modo oscuro / claro
-    var isDarkMode by rememberSaveable { mutableStateOf(false) }
+fun AppNavigation(
+    navController: NavHostController,
+    isDarkMode: Boolean,
+    onToggleDarkMode: () -> Unit
+) {
     val viewModel: FinanceViewModel = viewModel(factory = FinanceViewModel.Factory)
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
 
@@ -58,7 +55,7 @@ fun AppNavigation(navController: NavHostController) {
         composable(NavigationItem.Home.route) {
             HomeScreen(
                 isDarkMode = isDarkMode,
-                onToggleDarkMode = { isDarkMode = !isDarkMode }
+                onToggleDarkMode = onToggleDarkMode
             )
         }
         composable(NavigationItem.Reportes.route) {
