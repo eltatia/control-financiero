@@ -1,16 +1,27 @@
 package com.gabriel.controlfinanciero.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -23,11 +34,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -44,31 +55,50 @@ fun LoginScreen(
 
     var usuario by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    val bgColor = if (isDarkMode) Color(0xFF021712) else Color(0xFFF3F6FF)
-    val cardColor = if (isDarkMode) Color(0xFF071E1A) else Color.White
-    val textPrimary = if (isDarkMode) Color.White else Color.Black
-    val textSecondary = if (isDarkMode) Color(0xFF9CA3AF) else Color.Gray
+    var showPassword by remember { mutableStateOf(false) }
+    val colorScheme = MaterialTheme.colorScheme
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(bgColor)
-            .padding(16.dp),
+            .background(colorScheme.background)
+            .padding(horizontal = 20.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "Bienvenido",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = textPrimary
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Card(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = colorScheme.primaryContainer)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.AccountBalance,
+                    contentDescription = null,
+                    tint = colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+            Spacer(modifier = Modifier.size(12.dp))
+            Column {
+                Text(
+                    text = "Bienvenido",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colorScheme.onBackground
+                )
+                Text(
+                    text = "Controla tus finanzas en un solo lugar",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colorScheme.onSurfaceVariant
+                )
+            }
+        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Card(
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = cardColor),
+            colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -80,21 +110,51 @@ fun LoginScreen(
                     value = usuario,
                     onValueChange = { usuario = it },
                     label = { Text("Usuario") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Filled.Person,
+                            contentDescription = null
+                        )
+                    },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
                     label = { Text("Contraseña") },
-                    visualTransformation = PasswordVisualTransformation(),
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Filled.Lock,
+                            contentDescription = null
+                        )
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(
+                                imageVector = if (showPassword) {
+                                    Icons.Filled.VisibilityOff
+                                } else {
+                                    Icons.Filled.Visibility
+                                },
+                                contentDescription = null
+                            )
+                        }
+                    },
+                    visualTransformation = if (showPassword) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                loginError?.let { error ->
+                AnimatedVisibility(visible = loginError != null) {
                     Text(
-                        text = error,
-                        color = Color(0xFFEF4444),
+                        text = loginError.orEmpty(),
+                        color = colorScheme.error,
                         fontSize = 12.sp
                     )
                 }
@@ -103,18 +163,19 @@ fun LoginScreen(
                     text = "Ingresar",
                     onClick = { viewModel.login(usuario.trim(), password.trim()) },
                     enabled = usuario.isNotBlank() && password.isNotBlank(),
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF22C55E),
-                        contentColor = Color.Black
-                    )
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         TextButton(onClick = onCreateAccount) {
-            Text(text = "Crear cuenta", color = textSecondary)
+            Text(
+                text = "Crear cuenta",
+                color = colorScheme.primary,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }

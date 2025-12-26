@@ -36,12 +36,12 @@ import java.time.format.DateTimeFormatter
 import java.time.YearMonth
 
 // Colores modo oscuro para Home (parecidos a Reportes/Calendario)
-private val HomeDarkBackground = Color(0xFF021712)
-private val HomeDarkCard = Color(0xFF071E1A)
-private val HomeDarkSoft = Color(0xFF0A2320)
-private val HomeAccentGreen = Color(0xFF22C55E)
-private val HomeAccentRed = Color(0xFFEF4444)
-private val HomeTextMuted = Color(0xFF9CA3AF)
+private val HomeDarkBackground = Color(0xFF0B111A)
+private val HomeDarkCard = Color(0xFF111827)
+private val HomeDarkSoft = Color(0xFF1F2A37)
+private val HomeAccentGreen = Color(0xFF3AD19F)
+private val HomeAccentRed = Color(0xFFF87171)
+private val HomeTextMuted = Color(0xFFB6C2D2)
 
 // =============================================================
 //                 DONUT CHART PREMIUM (ANIMADO)
@@ -131,16 +131,17 @@ data class MovimientoUi(
 
 @Composable
 fun MovimientoItem(mov: MovimientoUi, darkMode: Boolean) {
-    val colorIngreso = if (darkMode) HomeAccentGreen else Color(0xFF16A34A)
-    val colorEgreso = Color(0xFFEF4444)
+    val colorScheme = MaterialTheme.colorScheme
+    val colorIngreso = colorScheme.secondary
+    val colorEgreso = colorScheme.error
 
     val colorMonto = if (mov.tipo == "INGRESO") colorIngreso else colorEgreso
     val signo = if (mov.tipo == "INGRESO") "+" else "−"
 
     val circleBg = if (mov.tipo == "INGRESO") {
-        if (darkMode) Color(0xFF064E3B) else Color(0xFFDFF6E6)
+        if (darkMode) Color(0xFF0B3F2E) else Color(0xFFDDF5EC)
     } else {
-        if (darkMode) Color(0xFF7F1D1D) else Color(0xFFFBE3E3)
+        if (darkMode) Color(0xFF4C1D1D) else Color(0xFFFCE8E8)
     }
 
     Row(
@@ -171,11 +172,11 @@ fun MovimientoItem(mov: MovimientoUi, darkMode: Boolean) {
                 mov.titulo,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 16.sp,
-                color = if (darkMode) Color.White else Color.Black
+                color = colorScheme.onSurface
             )
             Text(
                 mov.fechaTexto,
-                color = if (darkMode) HomeTextMuted else Color.Gray,
+                color = colorScheme.onSurfaceVariant,
                 fontSize = 13.sp
             )
         }
@@ -334,11 +335,12 @@ fun HomeScreen(
     var showAccountMenu by remember { mutableStateOf(false) }
     var showGastosAll by remember { mutableStateOf(false) }
 
-    val bgColor = if (isDarkMode) HomeDarkBackground else Color(0xFFF3F6FF)
-    val cardColor = if (isDarkMode) HomeDarkCard else Color.White
-    val softCard = if (isDarkMode) HomeDarkSoft else Color(0xFFECECEC)
-    val textPrimary = if (isDarkMode) Color.White else Color.Black
-    val textSecondary = if (isDarkMode) HomeTextMuted else Color.Gray
+    val colorScheme = MaterialTheme.colorScheme
+    val bgColor = colorScheme.background
+    val cardColor = colorScheme.surface
+    val softCard = colorScheme.surfaceVariant
+    val textPrimary = colorScheme.onBackground
+    val textSecondary = colorScheme.onSurfaceVariant
 
     val movimientosUi = transaccionesMes
         .sortedByDescending { it.fecha }
@@ -389,11 +391,11 @@ fun HomeScreen(
     }
 
     val donutColors = listOf(
-        Color(0xFFE74C3C),
-        Color(0xFF3498DB),
-        Color(0xFFF1C40F),
-        Color(0xFF9B59B6),
-        Color(0xFF10B981)
+        colorScheme.primary,
+        colorScheme.secondary,
+        colorScheme.tertiary,
+        Color(0xFF7C3AED),
+        Color(0xFFF59E0B)
     )
 
     val donutValuesCuenta = if (topCategoriasCuenta.isNotEmpty()) {
@@ -445,16 +447,16 @@ fun HomeScreen(
                     modifier = Modifier
                         .size(45.dp)
                         .background(
-                            if (isDarkMode) Color(0xFF1E293B) else Color(0xFFCDE2FF),
+                            colorScheme.primaryContainer,
                             CircleShape
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "A",
+                        text = nombreUsuario.firstOrNull()?.uppercase() ?: "C",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isDarkMode) HomeAccentGreen else Color(0xFF1D4ED8)
+                        color = colorScheme.onPrimaryContainer
                     )
                 }
 
@@ -493,7 +495,7 @@ fun HomeScreen(
                     Icon(
                         Icons.Default.Settings,
                         contentDescription = "Config",
-                        tint = if (isDarkMode) Color.White else Color.Black
+                        tint = colorScheme.onSurface
                     )
                 }
             }
