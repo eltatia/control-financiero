@@ -7,7 +7,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.gabriel.controlfinanciero.data.FinanceRepository
-import com.gabriel.controlfinanciero.data.hashPassword
+import com.gabriel.controlfinanciero.data.export.buildReportCsv
+import com.gabriel.controlfinanciero.data.security.hashPassword
+import com.gabriel.controlfinanciero.data.security.isBcryptHash
+import com.gabriel.controlfinanciero.data.security.verifyPassword
 import com.gabriel.controlfinanciero.data.local.entities.CuentaEntity
 import com.gabriel.controlfinanciero.data.local.entities.DeudaEntity
 import com.gabriel.controlfinanciero.data.local.entities.RecordatorioEntity
@@ -20,6 +23,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -790,9 +795,11 @@ class FinanceViewModel(
             if (existingUser == null) {
                 _loginError.value = "No existe una cuenta para este usuario. Crea una cuenta."
                 repository.setLoggedIn(false)
-            } else if (existingUser.password == password) {
-                val hashedPassword = hashPassword(username, password)
-                repository.actualizarUsuario(existingUser.copy(password = hashedPassword))
+            } else if (verifyPassword(existingUser.password, username, password)) {
+                if (!isBcryptHash(existingUser.password)) {
+                    val hashedPassword = hashPassword(password)
+                    repository.actualizarUsuario(existingUser.copy(password = hashedPassword))
+                }
                 repository.setUserId(existingUser.id)
                 repository.setUserName(existingUser.username)
                 val cuenta = repository.obtenerPrimeraCuentaPorUsuario(existingUser.id)
@@ -810,24 +817,9 @@ class FinanceViewModel(
                     repository.setAccountId(cuenta.id)
                     repository.setLoggedIn(true)
                     _loginError.value = null
-                }
-            } else if (existingUser.password == hashPassword(username, password)) {
-                repository.setUserId(existingUser.id)
-                repository.setUserName(existingUser.username)
-                val cuenta = repository.obtenerPrimeraCuentaPorUsuario(existingUser.id)
-                if (cuenta == null) {
-                    val nuevaCuentaId = repository.crearCuenta(
-                        nombre = "Cuenta principal",
-                        tipo = "EFECTIVO",
-                        saldoInicial = 0.0,
-                        userId = existingUser.id
-                    )
-                    repository.setAccountId(nuevaCuentaId.toInt())
                 } else {
                     repository.setAccountId(cuenta.id)
                 }
-                repository.setLoggedIn(true)
-                _loginError.value = null
             } else {
                 _loginError.value = "Usuario o contraseña incorrectos."
             }
@@ -851,7 +843,7 @@ class FinanceViewModel(
                 return@launch
             }
 
-            val hashedPassword = hashPassword(username, password)
+            val hashedPassword = hashPassword(password)
             val userId = repository.crearUsuario(username, hashedPassword)
             repository.setUserId(userId)
             repository.setUserName(username)
@@ -864,6 +856,15 @@ class FinanceViewModel(
             repository.setAccountId(cuentaId.toInt())
             repository.setLoggedIn(true)
             _createAccountError.value = null
+        }
+    }
+
+    suspend fun buildCsvExport(
+        transacciones: List<TransaccionEntity>,
+        cuentas: List<CuentaEntity>
+    ): String {
+        return withContext(Dispatchers.Default) {
+            buildReportCsv(transacciones, cuentas)
         }
     }
 

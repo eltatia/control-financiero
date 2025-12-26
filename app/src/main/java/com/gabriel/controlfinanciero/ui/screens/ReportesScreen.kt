@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -79,8 +81,10 @@ fun ReportesScreen(
     val textMutedColor = if (isDarkMode) TextMuted else Color.Gray
     val textPrimary = if (isDarkMode) Color.White else Color.Black
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var exportMenuExpanded by remember { mutableStateOf(false) }
     var pendingCsv by remember { mutableStateOf("") }
+    var isExporting by remember { mutableStateOf(false) }
 
     val transacciones by viewModel.todasTransacciones.collectAsState()
     val cuentas by viewModel.cuentas.collectAsState()
@@ -190,10 +194,6 @@ fun ReportesScreen(
             ingresosSerie,
             egresosSerie
         )
-    }
-    val formatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
-    val csvContent = remember(transaccionesRango, cuentas, formatter) {
-        buildCsvContent(transaccionesRango, cuentas, zoneId, formatter)
     }
     val createDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/csv")
@@ -565,14 +565,15 @@ fun ReportesScreen(
                 horizontalArrangement = Arrangement.End
             ) {
                 Box {
-                    Button(
-                        onClick = { exportMenuExpanded = true },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = AccentGreen,
-                            contentColor = Color.Black
-                        ),
-                        shape = RoundedCornerShape(30.dp),
-                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp)
+                Button(
+                    onClick = { exportMenuExpanded = true },
+                    enabled = !isExporting,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentGreen,
+                        contentColor = Color.Black
+                    ),
+                    shape = RoundedCornerShape(30.dp),
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.IosShare,
@@ -598,14 +599,20 @@ fun ReportesScreen(
                                     ).show()
                                     return@DropdownMenuItem
                                 }
-                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/csv"
-                                    putExtra(Intent.EXTRA_SUBJECT, "Reporte de transacciones")
-                                    putExtra(Intent.EXTRA_TEXT, csvContent)
+                                if (isExporting) return@DropdownMenuItem
+                                isExporting = true
+                                scope.launch {
+                                    val csvContent = viewModel.buildCsvExport(transaccionesRango, cuentas)
+                                    isExporting = false
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/csv"
+                                        putExtra(Intent.EXTRA_SUBJECT, "Reporte de transacciones")
+                                        putExtra(Intent.EXTRA_TEXT, csvContent)
+                                    }
+                                    context.startActivity(
+                                        Intent.createChooser(shareIntent, "Exportar reporte")
+                                    )
                                 }
-                                context.startActivity(
-                                    Intent.createChooser(shareIntent, "Exportar reporte")
-                                )
                             }
                         )
                         DropdownMenuItem(
@@ -620,8 +627,13 @@ fun ReportesScreen(
                                     ).show()
                                     return@DropdownMenuItem
                                 }
-                                pendingCsv = csvContent
-                                createDocumentLauncher.launch("reporte-transacciones.csv")
+                                if (isExporting) return@DropdownMenuItem
+                                isExporting = true
+                                scope.launch {
+                                    pendingCsv = viewModel.buildCsvExport(transaccionesRango, cuentas)
+                                    isExporting = false
+                                    createDocumentLauncher.launch("reporte-transacciones.csv")
+                                }
                             }
                         )
                     }
@@ -696,47 +708,6 @@ private fun ResumenMiniCard(
     }
 }
 
-private fun csvEscape(value: String): String {
-    val escaped = value.replace("\"", "\"\"")
-    return if (escaped.contains(",") || escaped.contains("\n") || escaped.contains("\r")) {
-        "\"$escaped\""
-    } else {
-        escaped
-    }
-}
-
-private fun buildCsvContent(
-    transacciones: List<com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity>,
-    cuentas: List<com.gabriel.controlfinanciero.data.local.entities.CuentaEntity>,
-    zoneId: ZoneId,
-    formatter: DateTimeFormatter
-): String {
-    val cuentasPorId = cuentas.associateBy { it.id }
-    return buildString {
-        append("Fecha,Título,Categoría,Tipo,Cuenta,Monto,Nota\n")
-        transacciones.sortedBy { it.fecha }.forEach { transaccion ->
-            val fecha = Instant.ofEpochMilli(transaccion.fecha)
-                .atZone(zoneId)
-                .toLocalDate()
-                .format(formatter)
-            val cuentaNombre = cuentasPorId[transaccion.cuentaId]?.nombre
-                ?: "Cuenta ${transaccion.cuentaId}"
-            val nota = transaccion.nota ?: ""
-            append(
-                listOf(
-                    fecha,
-                    transaccion.titulo,
-                    transaccion.categoria,
-                    transaccion.tipo,
-                    cuentaNombre,
-                    "%.2f".format(transaccion.monto),
-                    nota
-                ).joinToString(",") { value -> csvEscape(value) }
-            )
-            append("\n")
-        }
-    }
-}
 
 @Composable
 private fun LineChartSaldo(

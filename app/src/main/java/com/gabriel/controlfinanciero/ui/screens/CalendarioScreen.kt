@@ -143,13 +143,11 @@ fun CalendarioScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { }) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "Atrás",
-                        tint = textPrimary
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = null,
+                    tint = textPrimary
+                )
 
                 Spacer(modifier = Modifier.width(4.dp))
 
@@ -162,13 +160,11 @@ fun CalendarioScreen(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                IconButton(onClick = { }) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarToday,
-                        contentDescription = "Vista Calendario",
-                        tint = textPrimary
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.CalendarToday,
+                    contentDescription = null,
+                    tint = textPrimary
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))

@@ -26,6 +26,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gabriel.controlfinanciero.ui.components.PrimaryActionButton
+import com.gabriel.controlfinanciero.ui.components.SecondaryActionButton
 import com.gabriel.controlfinanciero.viewmodel.FinanceViewModel
 import java.time.Instant
 import java.time.LocalDate
@@ -577,21 +579,22 @@ fun HomeScreen(
 
             // ================= BOTONES =================
             Row(Modifier.fillMaxWidth()) {
-                Button(
+                PrimaryActionButton(
                     onClick = {
                         esIngreso = true
                         cuentaIndex = cuentas.indexOfFirst { it.id == (cuentaActual?.id ?: 0) }
                             .takeIf { it >= 0 } ?: 0
                         showMovimientoDialog = true
                     },
-                    colors = ButtonDefaults.buttonColors(HomeAccentGreen),
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) { Text("+ Añadir Ingreso") }
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(HomeAccentGreen),
+                    text = "+ Añadir Ingreso"
+                )
 
                 Spacer(modifier = Modifier.width(10.dp))
 
-                Button(
+                SecondaryActionButton(
                     onClick = {
                         esIngreso = false
                         cuentaIndex = cuentas.indexOfFirst { it.id == (cuentaActual?.id ?: 0) }
@@ -603,8 +606,9 @@ fun HomeScreen(
                         contentColor = if (isDarkMode) Color.White else Color.Black
                     ),
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) { Text("− Añadir Egreso") }
+                    shape = RoundedCornerShape(12.dp),
+                    text = "− Añadir Egreso"
+                )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -644,12 +648,11 @@ fun HomeScreen(
                                 )
                             }
                         }
-                        TextButton(onClick = { }) {
-                            Text(
-                                "Ver todo",
-                                color = if (isDarkMode) HomeAccentGreen else Color(0xFF3C67FF)
-                            )
-                        }
+                        Text(
+                            "Ver todo",
+                            color = if (isDarkMode) HomeAccentGreen else Color(0xFF3C67FF),
+                            fontSize = 12.sp
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -735,12 +738,11 @@ fun HomeScreen(
                             fontSize = 18.sp,
                             color = textPrimary
                         )
-                        TextButton(onClick = {}) {
-                            Text(
-                                "Ver todo",
-                                color = if (isDarkMode) HomeAccentGreen else Color(0xFF3C67FF)
-                            )
-                        }
+                        Text(
+                            "Ver todo",
+                            color = if (isDarkMode) HomeAccentGreen else Color(0xFF3C67FF),
+                            fontSize = 12.sp
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))

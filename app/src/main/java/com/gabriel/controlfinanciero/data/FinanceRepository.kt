@@ -10,7 +10,8 @@ import com.gabriel.controlfinanciero.data.local.entities.RecordatorioEntity
 import com.gabriel.controlfinanciero.data.local.entities.TransaccionEntity
 import com.gabriel.controlfinanciero.data.local.entities.UserEntity
 import kotlinx.coroutines.flow.Flow
-import java.security.MessageDigest
+import kotlinx.coroutines.flow.flowOf
+import com.gabriel.controlfinanciero.data.security.hashPassword
 
 class FinanceRepository private constructor(
     private val db: FinanceDatabase,
@@ -34,6 +35,7 @@ class FinanceRepository private constructor(
         saldoInicial: Double,
         userId: Int
     ): Long {
+        if (userId <= 0) return 0L
         val cuenta = CuentaEntity(
             nombre = nombre,
             tipo = tipo,
@@ -60,6 +62,7 @@ class FinanceRepository private constructor(
         db.transaccionDao().obtenerPorRangoFecha(desde, hasta)
 
     suspend fun registrarTransaccion(transaccion: TransaccionEntity) {
+        if (transaccion.cuentaId <= 0) return
         db.transaccionDao().insertar(transaccion)
     }
 
@@ -80,7 +83,7 @@ class FinanceRepository private constructor(
     // ------------------- DEUDAS / PRÉSTAMOS -------------------
 
     fun obtenerDeudasPorCuenta(accountId: Int): Flow<List<DeudaEntity>> =
-        db.deudaDao().obtenerPorCuenta(accountId)
+        if (accountId <= 0) flowOf(emptyList()) else db.deudaDao().obtenerPorCuenta(accountId)
 
     suspend fun crearDeuda(
         nombre: String,
@@ -89,6 +92,7 @@ class FinanceRepository private constructor(
         fechaVencimiento: Long? = null,
         accountId: Int
     ) {
+        if (accountId <= 0) return
         val ahora = System.currentTimeMillis()
         val deuda = DeudaEntity(
             nombre = nombre,
@@ -132,17 +136,24 @@ class FinanceRepository private constructor(
         hasta: Long,
         accountId: Int
     ): Flow<List<RecordatorioEntity>> =
-        db.recordatorioDao().obtenerRecordatoriosRango(desde, hasta, accountId)
+        if (accountId <= 0) {
+            flowOf(emptyList())
+        } else {
+            db.recordatorioDao().obtenerRecordatoriosRango(desde, hasta, accountId)
+        }
 
     suspend fun crearRecordatorio(recordatorio: RecordatorioEntity) {
+        if (recordatorio.accountId <= 0) return
         db.recordatorioDao().insertar(recordatorio)
     }
 
     suspend fun actualizarRecordatorio(recordatorio: RecordatorioEntity) {
+        if (recordatorio.accountId <= 0) return
         db.recordatorioDao().actualizar(recordatorio)
     }
 
     suspend fun eliminarRecordatorio(recordatorio: RecordatorioEntity) {
+        if (recordatorio.accountId <= 0) return
         db.recordatorioDao().eliminar(recordatorio)
     }
 
@@ -156,7 +167,7 @@ class FinanceRepository private constructor(
             db.transaccionDao().eliminarTodas()
             db.deudaDao().eliminarTodas()
             db.cuentaDao().eliminarTodas()
-            db.userDao().insertar(UserEntity(username = "Alex", password = hashPassword("Alex", "1234")))
+            db.userDao().insertar(UserEntity(username = "Alex", password = hashPassword("1234")))
 
             val userId = db.userDao().obtenerPorUsername("Alex")?.id ?: 1
             val cuentasIds = db.cuentaDao().insertarLista(
@@ -272,20 +283,4 @@ class FinanceRepository private constructor(
         db.userDao().actualizar(usuario)
     }
 
-    suspend fun resetUserData(username: String) {
-        val user = db.userDao().obtenerPorUsername(username) ?: return
-        val cuentas = db.cuentaDao().obtenerPorUsuarioSync(user.id)
-        val cuentaIds = cuentas.map { it.id }
-        if (cuentaIds.isNotEmpty()) {
-            db.transaccionDao().eliminarPorCuentaIds(cuentaIds)
-        }
-        db.cuentaDao().eliminarPorUsuario(user.id)
-        db.userDao().eliminarPorUsername(username)
-    }
-}
-
-fun hashPassword(username: String, password: String): String {
-    val normalized = "$username:$password"
-    val digest = MessageDigest.getInstance("SHA-256").digest(normalized.toByteArray())
-    return digest.joinToString("") { byte -> "%02x".format(byte) }
 }
