@@ -817,8 +817,6 @@ class FinanceViewModel(
                     repository.setAccountId(cuenta.id)
                     repository.setLoggedIn(true)
                     _loginError.value = null
-                } else {
-                    repository.setAccountId(cuenta.id)
                 }
             } else {
                 _loginError.value = "Usuario o contraseña incorrectos."
